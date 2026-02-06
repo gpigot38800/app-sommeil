@@ -31,10 +31,13 @@ interface TransitionPlanWithDays extends TransitionPlan {
     targetSleepTime: string;
     targetWakeTime: string;
     caffeineCutoff: string;
-    lightStart: string;
-    lightEnd: string;
+    lightStart: string | null;
+    lightEnd: string | null;
     deficitMinutes: number | null;
     notes: string | null;
+    shiftType: string | null;
+    workStartTime: string | null;
+    workEndTime: string | null;
   }>;
 }
 

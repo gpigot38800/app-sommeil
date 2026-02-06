@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { fromShiftId, toShiftId, availableDays } = result.data;
+  const { fromShiftId, toShiftId } = result.data;
 
   // Fetch user profile
   const [profile] = await db
@@ -85,13 +85,16 @@ export async function POST(request: Request) {
       type: fromShift.shiftType as ShiftType,
       startTime: fromShift.startTime,
       endTime: fromShift.endTime,
+      startDate: fromShift.startDate,
+      endDate: fromShift.endDate,
     },
     toShift: {
       type: toShift.shiftType as ShiftType,
       startTime: toShift.startTime,
       endTime: toShift.endTime,
+      startDate: toShift.startDate,
+      endDate: toShift.endDate,
     },
-    availableDays,
   });
 
   // Persist the plan
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
     })
     .returning();
 
-  // Persist the plan days
+  // Persist the plan days with shift context
   const insertedDays = await db
     .insert(planDays)
     .values(
@@ -121,6 +124,9 @@ export async function POST(request: Request) {
         lightEnd: day.lightEnd,
         deficitMinutes: day.deficitMinutes,
         notes: day.notes,
+        shiftType: day.shiftType,
+        workStartTime: day.workStartTime,
+        workEndTime: day.workEndTime,
       }))
     )
     .returning();

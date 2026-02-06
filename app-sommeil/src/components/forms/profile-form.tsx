@@ -69,7 +69,11 @@ export function ProfileForm({ defaultValues, isNewUser }: ProfileFormProps) {
     }
 
     toast.success("Profil sauvegardé avec succès !");
-    router.refresh();
+    if (isNewUser) {
+      router.push("/planning");
+    } else {
+      router.refresh();
+    }
     setLoading(false);
   }
 

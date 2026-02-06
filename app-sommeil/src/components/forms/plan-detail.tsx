@@ -8,6 +8,7 @@ import {
   Lightbulb,
   AlertTriangle,
   CheckCircle,
+  Briefcase,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +19,13 @@ interface PlanDay {
   targetSleepTime: string;
   targetWakeTime: string;
   caffeineCutoff: string;
-  lightStart: string;
-  lightEnd: string;
+  lightStart: string | null;
+  lightEnd: string | null;
   deficitMinutes: number | null;
   notes: string | null;
+  shiftType: string | null;
+  workStartTime: string | null;
+  workEndTime: string | null;
 }
 
 interface TransitionPlan {
@@ -46,6 +50,12 @@ const typeLabels: Record<string, string> = {
   nuit: "Nuit",
 };
 
+const shiftBadgeStyles: Record<string, string> = {
+  jour: "bg-green-500/20 text-green-400 border-green-500/30",
+  soir: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+  nuit: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
+};
+
 function formatDeficit(minutes: number | null): string {
   if (!minutes || minutes === 0) return "0h";
   const h = Math.floor(minutes / 60);
@@ -55,7 +65,8 @@ function formatDeficit(minutes: number | null): string {
   return `${h}h${m}`;
 }
 
-function formatTime(time: string): string {
+function formatTime(time: string | null): string {
+  if (!time) return "";
   return time.substring(0, 5);
 }
 
@@ -145,13 +156,28 @@ export function PlanDetail({ planId, initialPlan }: PlanDetailProps) {
           .sort((a, b) => a.dayNumber - b.dayNumber)
           .map((day) => {
             const dayDeficit = day.deficitMinutes ?? 0;
+            const hasLight = day.lightStart && day.lightEnd;
             return (
               <Card key={day.id}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
-                      Jour {day.dayNumber}
-                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base">
+                        Jour {day.dayNumber}
+                      </CardTitle>
+                      {day.shiftType ? (
+                        <Badge
+                          variant="outline"
+                          className={shiftBadgeStyles[day.shiftType] ?? ""}
+                        >
+                          {typeLabels[day.shiftType] ?? day.shiftType}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30">
+                          Repos
+                        </Badge>
+                      )}
+                    </div>
                     {dayDeficit > 0 && (
                       <Badge
                         variant="outline"
@@ -165,6 +191,14 @@ export function PlanDetail({ planId, initialPlan }: PlanDetailProps) {
                       </Badge>
                     )}
                   </div>
+                  {day.shiftType && day.workStartTime && day.workEndTime && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                      <Briefcase className="h-3 w-3 shrink-0" />
+                      <span>
+                        {formatTime(day.workStartTime)} - {formatTime(day.workEndTime)}
+                      </span>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-2.5">
                   <div className="flex items-center gap-2 text-sm">
@@ -188,14 +222,16 @@ export function PlanDetail({ planId, initialPlan }: PlanDetailProps) {
                       {formatTime(day.caffeineCutoff)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Lightbulb className="h-4 w-4 text-yellow-400 shrink-0" />
-                    <span className="text-muted-foreground">Lumière</span>
-                    <span className="ml-auto font-medium">
-                      {formatTime(day.lightStart)} -{" "}
-                      {formatTime(day.lightEnd)}
-                    </span>
-                  </div>
+                  {hasLight && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Lightbulb className="h-4 w-4 text-yellow-400 shrink-0" />
+                      <span className="text-muted-foreground">Lumière tamisée</span>
+                      <span className="ml-auto font-medium">
+                        {formatTime(day.lightStart)} -{" "}
+                        {formatTime(day.lightEnd)}
+                      </span>
+                    </div>
+                  )}
                   {day.notes && (
                     <p className="text-xs text-muted-foreground border-t pt-2 mt-2">
                       {day.notes}

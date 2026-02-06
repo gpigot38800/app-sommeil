@@ -25,42 +25,38 @@ export function circularDifference(fromMinutes: number, toMinutes: number): numb
   return diff;
 }
 
-/** Calculate caffeine cutoff: 6h before target sleep time */
-export function calculateCaffeineCutoff(targetSleepMinutes: number): string {
-  return minutesToTime(targetSleepMinutes - 360);
+/**
+ * Calculate caffeine cutoff based on shift type:
+ * - jour: 8h before target sleep (480 min)
+ * - soir/nuit: 6h before target sleep (360 min)
+ */
+export function calculateCaffeineCutoff(
+  targetSleepMinutes: number,
+  shiftType: ShiftType | null
+): string {
+  // jour or repos (null) = 8h, soir/nuit = 6h
+  const hoursBeforeSleep = (shiftType === "jour" || shiftType === null) ? 480 : 360;
+  return minutesToTime(targetSleepMinutes - hoursBeforeSleep);
 }
 
 /**
- * Calculate 2h light exposure window based on target shift type.
- * - jour: centered around wake time (light at wake to advance circadian)
- * - soir: late morning (moderate light for intermediate cycle)
- * - nuit: 2h before sleep time (darkness to delay circadian)
+ * Calculate 2h dimmed light window before bedtime.
+ * - jour/soir/repos (null): 2h before target sleep time (dimmed light to prepare for sleep)
+ * - nuit: no light window (return null) since user sleeps during daytime
  */
 export function calculateLightWindow(
-  targetShiftType: ShiftType,
-  targetSleepMinutes: number,
-  targetWakeMinutes: number
-): { lightStart: string; lightEnd: string } {
-  let startMinutes: number;
-
-  switch (targetShiftType) {
-    case "jour":
-      // Light centered around wake time
-      startMinutes = targetWakeMinutes - 60;
-      break;
-    case "soir":
-      // Light in late morning (10:00-12:00 range)
-      startMinutes = targetWakeMinutes + 60;
-      break;
-    case "nuit":
-      // Darkness window: 2h before sleep (avoid light before bed)
-      startMinutes = targetSleepMinutes - 120;
-      break;
+  dayShiftType: ShiftType | null,
+  targetSleepMinutes: number
+): { lightStart: string | null; lightEnd: string | null } {
+  if (dayShiftType === "nuit") {
+    return { lightStart: null, lightEnd: null };
   }
 
+  // For jour, soir, and repos (null): 2h dimmed light before bedtime
+  const startMinutes = targetSleepMinutes - 120;
   return {
     lightStart: minutesToTime(startMinutes),
-    lightEnd: minutesToTime(startMinutes + 120),
+    lightEnd: minutesToTime(targetSleepMinutes),
   };
 }
 
@@ -77,7 +73,6 @@ export function calculateSleepDuration(
 /**
  * Calculate sleep deficit for a day.
  * Deficit = max(0, habitual duration - available sleep time)
- * Available sleep = time between target sleep and next constraint (shift start)
  */
 export function calculateDeficit(
   habitualDurationMinutes: number,
@@ -88,14 +83,13 @@ export function calculateDeficit(
   return Math.max(0, habitualDurationMinutes - availableDuration);
 }
 
-/** Get reference sleep time for a shift type */
-export function getReferenceSleepTime(shiftType: ShiftType): number {
-  switch (shiftType) {
-    case "jour":
-      return timeToMinutes("23:00");
-    case "soir":
-      return timeToMinutes("01:00");
-    case "nuit":
-      return timeToMinutes("08:00");
-  }
+/** Calculate the number of calendar days between two dates */
+export function differenceInCalendarDays(
+  dateA: string,
+  dateB: string
+): number {
+  const a = new Date(dateA);
+  const b = new Date(dateB);
+  const diffMs = a.getTime() - b.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
 }

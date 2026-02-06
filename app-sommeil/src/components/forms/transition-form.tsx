@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -41,10 +40,13 @@ interface PlanDay {
   targetSleepTime: string;
   targetWakeTime: string;
   caffeineCutoff: string;
-  lightStart: string;
-  lightEnd: string;
+  lightStart: string | null;
+  lightEnd: string | null;
   deficitMinutes: number | null;
   notes: string | null;
+  shiftType: string | null;
+  workStartTime: string | null;
+  workEndTime: string | null;
 }
 
 interface TransitionFormProps {
@@ -73,7 +75,6 @@ export function TransitionForm({ shifts, onPlanGenerated }: TransitionFormProps)
   const router = useRouter();
   const [fromShiftId, setFromShiftId] = useState("");
   const [toShiftId, setToShiftId] = useState("");
-  const [availableDays, setAvailableDays] = useState(3);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -96,7 +97,7 @@ export function TransitionForm({ shifts, onPlanGenerated }: TransitionFormProps)
     const response = await fetch("/api/transition-plans", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fromShiftId, toShiftId, availableDays }),
+      body: JSON.stringify({ fromShiftId, toShiftId }),
     });
 
     if (!response.ok) {
@@ -165,17 +166,6 @@ export function TransitionForm({ shifts, onPlanGenerated }: TransitionFormProps)
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Nombre de jours disponibles (2-6)</Label>
-            <Input
-              type="number"
-              min={2}
-              max={6}
-              value={availableDays}
-              onChange={(e) => setAvailableDays(Number(e.target.value))}
-            />
           </div>
 
           {error && (

@@ -7,13 +7,16 @@ export interface PlanningInput {
     type: ShiftType;
     startTime: string; // HH:MM
     endTime: string; // HH:MM
+    startDate: string; // YYYY-MM-DD
+    endDate: string; // YYYY-MM-DD
   };
   toShift: {
     type: ShiftType;
     startTime: string; // HH:MM
     endTime: string; // HH:MM
+    startDate: string; // YYYY-MM-DD
+    endDate: string; // YYYY-MM-DD
   };
-  availableDays: number; // 2-6
 }
 
 export interface GeneratedPlanDay {
@@ -21,10 +24,13 @@ export interface GeneratedPlanDay {
   targetSleepTime: string; // HH:MM
   targetWakeTime: string; // HH:MM
   caffeineCutoff: string; // HH:MM
-  lightStart: string; // HH:MM
-  lightEnd: string; // HH:MM
+  lightStart: string | null; // HH:MM or null for night shifts
+  lightEnd: string | null; // HH:MM or null for night shifts
   deficitMinutes: number;
   notes: string;
+  shiftType: ShiftType | null; // null = jour de repos
+  workStartTime: string | null; // HH:MM or null
+  workEndTime: string | null; // HH:MM or null
 }
 
 export interface PlanResult {

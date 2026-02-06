@@ -63,8 +63,11 @@ export const planDays = pgTable("plan_days", {
   targetSleepTime: time("target_sleep_time").notNull(),
   targetWakeTime: time("target_wake_time").notNull(),
   caffeineCutoff: time("caffeine_cutoff").notNull(),
-  lightStart: time("light_start").notNull(),
-  lightEnd: time("light_end").notNull(),
+  lightStart: time("light_start"),
+  lightEnd: time("light_end"),
   deficitMinutes: integer("deficit_minutes").default(0),
   notes: text("notes"),
+  shiftType: text("shift_type"),
+  workStartTime: time("work_start_time"),
+  workEndTime: time("work_end_time"),
 });
