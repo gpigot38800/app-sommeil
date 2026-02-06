@@ -38,3 +38,33 @@ export const workShifts = pgTable("work_shifts", {
     .defaultNow()
     .notNull(),
 });
+
+export const transitionPlans = pgTable("transition_plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .references(() => profiles.id, { onDelete: "cascade" })
+    .notNull(),
+  fromShift: text("from_shift").notNull(),
+  toShift: text("to_shift").notNull(),
+  startDate: date("start_date").notNull(),
+  daysCount: integer("days_count").notNull(),
+  totalDeficitMinutes: integer("total_deficit_minutes").default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const planDays = pgTable("plan_days", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  planId: uuid("plan_id")
+    .references(() => transitionPlans.id, { onDelete: "cascade" })
+    .notNull(),
+  dayNumber: integer("day_number").notNull(),
+  targetSleepTime: time("target_sleep_time").notNull(),
+  targetWakeTime: time("target_wake_time").notNull(),
+  caffeineCutoff: time("caffeine_cutoff").notNull(),
+  lightStart: time("light_start").notNull(),
+  lightEnd: time("light_end").notNull(),
+  deficitMinutes: integer("deficit_minutes").default(0),
+  notes: text("notes"),
+});

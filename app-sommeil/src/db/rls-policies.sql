@@ -32,3 +32,59 @@ CREATE POLICY "Users can update own shifts" ON work_shifts
 
 CREATE POLICY "Users can delete own shifts" ON work_shifts
   FOR DELETE USING (user_id = auth.uid());
+
+-- Enable RLS on transition_plans
+ALTER TABLE transition_plans ENABLE ROW LEVEL SECURITY;
+
+-- Transition plans: users can only see/modify their own plans
+CREATE POLICY "Users can view own plans" ON transition_plans
+  FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY "Users can insert own plans" ON transition_plans
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users can update own plans" ON transition_plans
+  FOR UPDATE USING (user_id = auth.uid());
+
+CREATE POLICY "Users can delete own plans" ON transition_plans
+  FOR DELETE USING (user_id = auth.uid());
+
+-- Enable RLS on plan_days
+ALTER TABLE plan_days ENABLE ROW LEVEL SECURITY;
+
+-- Plan days: users can only see/modify days of their own plans (via join)
+CREATE POLICY "Users can view own plan days" ON plan_days
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM transition_plans
+      WHERE transition_plans.id = plan_days.plan_id
+      AND transition_plans.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can insert own plan days" ON plan_days
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM transition_plans
+      WHERE transition_plans.id = plan_days.plan_id
+      AND transition_plans.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can update own plan days" ON plan_days
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM transition_plans
+      WHERE transition_plans.id = plan_days.plan_id
+      AND transition_plans.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can delete own plan days" ON plan_days
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM transition_plans
+      WHERE transition_plans.id = plan_days.plan_id
+      AND transition_plans.user_id = auth.uid()
+    )
+  );

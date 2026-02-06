@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, User } from "lucide-react";
+import { CalendarDays, ClipboardList, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/planning", label: "Planning", icon: CalendarDays },
+  { href: "/transition", label: "Mon plan", icon: ClipboardList },
   { href: "/profil", label: "Profil", icon: User },
 ];
 
