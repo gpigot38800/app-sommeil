@@ -184,11 +184,35 @@ M (Matin), S (Soir), N (Nuit), J (Journee), JL (Jour Long), NL (Nuit Longue), R 
 
 * Import CSV en masse compatible logiciels hospitaliers (Octime, Chronos, Kronos, NurseGrid)
 * Calcul automatique de fatigue (pas d'input employe)
+* **Alertes de conformite reglementaire** (Code du Travail - 6 regles)
 * Dashboard avec alertes visuelles (banniere rouge si cas critiques)
 * CRUD employes avec filtres par service
 * Gestion codes vacation personnalisables par hopital
 * Pattern de rotation (sequence de codes applicable a N employes)
 * Charts : fatigue par employe, distribution shifts, tendances
+
+---
+
+## Conformite reglementaire (Code du Travail)
+
+Detection automatique de 6 regles du Code du Travail, affichees en temps reel dans le planning (pastilles rouges + tooltip) et le dashboard (banniere + tableau detaille).
+
+### Regles implementees
+
+| # | Regle | Seuil | Severite | Reference |
+|---|-------|-------|----------|-----------|
+| 1 | Repos minimum entre 2 shifts | 11h | `violation` si <11h, `critical` si <9h | Art. L3131-1 |
+| 2 | Duree max journaliere | 12h (derogation hopital) | `violation` | Art. L3121-18 |
+| 3 | Duree max hebdomadaire | 48h | `violation` si >48h, `critical` si >54h | Art. L3121-20 |
+| 4 | Nuits consecutives max | 3 nuits | `violation` si 4, `critical` si 5+ | |
+| 5 | Repos hebdomadaire | 35h consecutives min | `violation` | Art. L3132-2 |
+| 6 | Jours consecutifs travailles | 6 max | `violation` si 7+ | Art. L3132-1 |
+
+### Affichage
+
+* **Planning** : pastille rouge sur chaque cellule en violation, tooltip au survol avec detail, bordure rouge si critique
+* **Dialog shift** : encart orange "Alertes reglementaires" affichant les violations en temps reel lors de la creation/modification d'un shift
+* **Dashboard** : banniere "X violations reglementaires cette semaine", tableau detaille (employe, service, type, date, severite), KPI "Violations Code du Travail"
 
 ---
 
@@ -215,6 +239,13 @@ M (Matin), S (Soir), N (Nuit), J (Journee), JL (Jour Long), NL (Nuit Longue), R 
 * Responsive mobile
 * Tests E2E
 
+### V5 - Conformite reglementaire
+* Moteur de conformite Code du Travail (6 regles)
+* Alertes visuelles dans le planning (pastilles + tooltip)
+* Warning temps reel dans le dialog de creation de shift
+* Banniere + tableau violations dans le dashboard
+* KPI violations dans les indicateurs
+
 ---
 
 ## Critere de succes MVP
@@ -225,6 +256,8 @@ M (Matin), S (Soir), N (Nuit), J (Journee), JL (Jour Long), NL (Nuit Longue), R 
   * Voir en un coup d'oeil qui est en fatigue critique
   * Naviguer par service pour identifier les equipes a risque
   * Consulter le detail fatigue d'un employe specifique
+  * Identifier les violations du Code du Travail directement dans le planning
+  * Voir un resume des violations reglementaires dans le dashboard
 
 ---
 

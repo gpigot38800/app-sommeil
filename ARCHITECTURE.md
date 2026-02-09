@@ -56,13 +56,15 @@ app-sommeil/
 │   │   │       ├── employees/   # CRUD employes
 │   │   │       ├── shifts/      # CRUD shifts + import CSV + bulk
 │   │   │       ├── shift-codes/ # CRUD codes vacation
-│   │   │       └── fatigue/     # Calcul + consultation fatigue
+│   │   │       ├── fatigue/     # Calcul + consultation fatigue
+│   │   │       └── compliance/  # Verification conformite Code du Travail
 │   │   ├── layout.tsx       # Layout racine
 │   │   └── page.tsx         # Redirect -> /admin/dashboard
 │   ├── components/
 │   │   ├── ui/              # Composants shadcn/ui
 │   │   ├── charts/          # Graphiques fatigue, shifts, tendances
-│   │   ├── dashboard/       # Composants dashboard (KPI, alertes, table)
+│   │   ├── dashboard/       # Composants dashboard (KPI, alertes, table, compliance)
+│   │   ├── planning/        # Calendrier, dialog shift, indicateurs compliance
 │   │   ├── forms/           # Formulaires (employes, shifts, CSV, rotation)
 │   │   └── layout/          # Navbar, Sidebar, DashboardShell
 │   ├── db/
@@ -77,6 +79,10 @@ app-sommeil/
 │   │   │   ├── types.ts     # FatigueResult, DailyEstimate, RiskLevel
 │   │   │   ├── estimators.ts # estimateSleepOpportunity()
 │   │   │   └── __tests__/   # Tests unitaires Vitest
+│   │   ├── compliance-engine/ # Moteur de conformite Code du Travail
+│   │   │   ├── index.ts     # checkEmployeeCompliance()
+│   │   │   ├── types.ts     # ComplianceViolation, ViolationType, Thresholds
+│   │   │   └── rules.ts     # 6 regles (repos, duree, nuits, hebdo...)
 │   │   ├── validators/      # Schemas Zod
 │   │   └── utils.ts         # Utilitaires
 │   ├── hooks/               # Custom React hooks
@@ -203,6 +209,41 @@ Pour chaque employe, sur une fenetre glissante :
 
 ---
 
+## Moteur de conformite reglementaire
+
+### Regles du Code du Travail
+
+Detection automatique de 6 regles, affichees en temps reel dans le planning et le dashboard.
+
+| # | Regle | Seuil | Severite | Reference |
+|---|-------|-------|----------|-----------|
+| 1 | Repos minimum entre 2 shifts | 11h | `violation` si <11h, `critical` si <9h | Art. L3131-1 |
+| 2 | Duree max journaliere | 12h (derogation hopital) | `violation` | Art. L3121-18 |
+| 3 | Duree max hebdomadaire | 48h | `violation` si >48h, `critical` si >54h | Art. L3121-20 |
+| 4 | Nuits consecutives max | 3 nuits | `violation` si 4, `critical` si 5+ | |
+| 5 | Repos hebdomadaire | 35h consecutives min | `violation` | Art. L3132-2 |
+| 6 | Jours consecutifs travailles | 6 max | `violation` si 7+ | Art. L3132-1 |
+
+### Architecture
+
+- **`compliance-engine/rules.ts`** : 6 fonctions independantes, une par regle
+- **`compliance-engine/index.ts`** : orchestrateur `checkEmployeeCompliance()` qui appelle les 6 regles
+- **`api/admin/compliance`** : endpoint GET avec parametres `startDate`, `endDate`, `employeeId` (optionnel)
+
+### Affichage
+
+- **Planning** : pastille rouge/orange sur chaque cellule en violation (tooltip au survol), bordure rouge si critique
+- **Dialog shift** : encart orange "Alertes reglementaires" avec calcul local en temps reel
+- **Dashboard** : banniere violations + tableau detaille (employe, service, type, date, severite) + KPI
+
+### Declenchement
+- Chargement du planning (fetch parallele avec les shifts)
+- Navigation entre semaines (recalcul automatique)
+- Creation/modification de shift (calcul local sans appel API)
+- Chargement du dashboard (fenetre 7 jours glissants)
+
+---
+
 ## Import CSV
 
 ### Formats supportes
@@ -221,10 +262,10 @@ Dictionnaire de noms reconnus automatiquement (Matricule, Nom, Prenom, Service, 
 ## Navigation
 
 ```
-/admin/dashboard      -> Tableau de bord (KPI, alertes, charts)
+/admin/dashboard      -> Tableau de bord (KPI, alertes, charts, compliance)
 /admin/employees      -> Liste employes (CRUD, filtres par service)
 /admin/employees/[id] -> Detail employe (fatigue, historique)
-/admin/planning       -> Vue planning multi-employes
+/admin/planning       -> Vue planning multi-employes + indicateurs compliance
 /admin/import         -> Import CSV
 /admin/settings       -> Parametres organisation + codes vacation
 ```
