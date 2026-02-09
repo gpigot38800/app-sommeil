@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ClipboardList, User } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Upload, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/planning", label: "Planning", icon: CalendarDays },
-  { href: "/transition", label: "Mon plan", icon: ClipboardList },
-  { href: "/profil", label: "Profil", icon: User },
+  { href: "/admin/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+  { href: "/admin/employees", label: "Employés", icon: Users },
+  { href: "/admin/planning", label: "Planning", icon: CalendarDays },
+  { href: "/admin/import", label: "Import CSV", icon: Upload },
+  { href: "/admin/settings", label: "Paramètres", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -37,7 +39,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
       >
         <div className="flex h-14 items-center border-b px-4">
-          <span className="text-lg font-semibold">App Sommeil</span>
+          <span className="text-lg font-semibold">Gestion Fatigue</span>
         </div>
         <nav className="flex-1 space-y-1 p-3">
           {navItems.map((item) => {

@@ -42,10 +42,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from auth pages
-  if (user && (pathname.startsWith("/login") || pathname.startsWith("/register"))) {
+  // Redirect authenticated users away from login to admin dashboard
+  // Note: /register is also used for onboarding (organization setup) so we allow it
+  if (user && pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/planning";
+    url.pathname = "/admin/dashboard";
     return NextResponse.redirect(url);
   }
 

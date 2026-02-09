@@ -21,6 +21,10 @@ export const registerSchema = z.object({
   confirmPassword: z
     .string()
     .min(1, { error: "Veuillez confirmer le mot de passe" }),
+  organizationName: z
+    .string()
+    .min(2, { error: "Le nom de l'établissement doit contenir au moins 2 caractères" })
+    .max(100, { error: "Le nom de l'établissement ne peut pas dépasser 100 caractères" }),
 }).refine((data) => data.password === data.confirmPassword, {
   error: "Les mots de passe ne correspondent pas",
   path: ["confirmPassword"],

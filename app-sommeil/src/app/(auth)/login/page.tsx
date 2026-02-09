@@ -55,16 +55,16 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/planning");
+    router.push("/admin/dashboard");
     router.refresh();
   }
 
   return (
     <Card>
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Connexion</CardTitle>
+        <CardTitle className="text-2xl">Connexion administrateur</CardTitle>
         <CardDescription>
-          Accédez à votre planificateur de sommeil
+          Accédez au tableau de bord de votre établissement
         </CardDescription>
       </CardHeader>
       <CardContent>

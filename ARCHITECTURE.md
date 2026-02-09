@@ -1,138 +1,37 @@
-# Architecture technique - App Sommeil
+# Architecture technique - Plateforme B2B de gestion de fatigue hospitaliere
 
-> Application web pour travailleurs de nuit : planification du sommeil, suivi de fatigue, transitions jour/nuit.
+> Application web B2B pour hopitaux : gestion des plannings, calcul automatique de fatigue, dashboard d'alertes.
 
 ---
 
 ## Stack technique retenue
 
 | Categorie | Choix | Raison principale |
-|---|---|---|
-| **Framework** | Next.js 15 (App Router) | Ecosysteme le plus riche, meilleur chemin vers le mobile |
-| **Base de donnees** | Supabase (PostgreSQL) | DB + Auth + Storage gratuit en un seul service |
+|-----------|-------|-------------------|
+| **Framework** | Next.js 15 (App Router) | Ecosysteme riche, Server Components pour dashboards |
+| **Base de donnees** | Supabase (PostgreSQL) | DB + Auth + RLS en un seul service |
 | **ORM** | Drizzle ORM | 7 kb, type-safe, zero cold start serverless |
-| **Authentification** | Supabase Auth | Inclus gratuit, 50K MAU, RLS integre |
-| **UI / Styling** | Tailwind CSS + shadcn/ui | Dark mode natif, code possede, composant Chart |
+| **Authentification** | Supabase Auth | Admin uniquement, RLS par organisation |
+| **UI / Styling** | Tailwind CSS + shadcn/ui | Dark mode natif, composants possedes |
 | **Visualisation** | Recharts (via shadcn/ui Chart) | Theming automatique, tous types de graphiques |
+| **Import CSV** | papaparse | ~5kb, parsing robuste multi-encodage |
 | **Mobile** | PWA (Phase 1) + Capacitor (Phase 2) | 100% reutilisation du code |
-| **Hebergement** | Vercel | Meilleur support Next.js, deploiement simple |
+| **Hebergement** | Vercel | Meilleur support Next.js |
 
 ---
 
-## Framework : Next.js 15 (App Router)
+## Modele B2B - Multi-tenancy
 
-**Pourquoi :**
-- Ecosysteme React = le plus riche, chaque outil tiers a un support de premiere classe
-- Server Components ideaux pour les dashboards analytiques du sommeil
-- Meilleur chemin vers le mobile (PWA + Capacitor)
-- Le plus de ressources en francais et meilleur support IA / generation de code
-- App Router = layouts imbriques, loading states, streaming SSR
+### Principes
+- **Isolation par organisation** : chaque hopital ne voit que ses propres donnees
+- **Admin uniquement** : seuls les gestionnaires/RH ont un compte auth
+- **Employes = donnees** : les salaries sont des enregistrements, pas des utilisateurs auth
+- **RLS sur toutes les tables** : filtrage automatique par `organization_id`
 
----
-
-## Base de donnees : Supabase (PostgreSQL manage)
-
-**Pourquoi :**
-- PostgreSQL manage + Auth + Storage + Realtime en un seul service gratuit
-- 500 MB gratuit = des centaines de milliers d'entrees de sommeil
-- Row-Level Security (RLS) natif pour isoler les donnees par utilisateur
-- Region EU disponible (conformite RGPD)
-- Zero configuration supplementaire pour l'authentification
-
----
-
-## ORM : Drizzle ORM
-
-**Pourquoi :**
-- Bundle size de **7 kb** (vs binaire Rust lourd de Prisma)
-- Zero cold start sur Vercel serverless
-- Type-safe avec excellent TypeScript DX
-- Syntaxe proche du SQL = plus de controle sur les requetes
-- Drizzle Studio inclus pour explorer la base de donnees
-- Fonctionne par-dessus le client Supabase PostgreSQL
-
----
-
-## Authentification : Supabase Auth
-
-**Pourquoi :**
-- Deja inclus dans le free tier Supabase = zero config supplementaire
-- Integration native avec Row-Level Security (RLS PostgreSQL)
-- Email/password, magic links, providers sociaux (Google, Apple, etc.)
-- Gratuit jusqu'a 50 000 MAU
-- Propriete totale des donnees (dans votre instance Supabase)
-
-**Contexte important (2025) :**
-- NextAuth/Auth.js est en maintenance seule depuis septembre 2025
-- Lucia Auth deprecie depuis mars 2025
-- Supabase Auth est le choix le plus stable pour un nouveau projet avec Supabase
-
----
-
-## UI / Styling : Tailwind CSS + shadcn/ui
-
-**Pourquoi :**
-- **Dark mode de premiere classe** = critique pour des travailleurs de nuit
-- Vous possedez le code (composants copies dans votre projet, pas de dependance npm)
-- Composant Chart integre (base sur Recharts) = theming automatique dark/light
-- Le plus utilise avec l'IA = meilleure generation de code assistee
-- Tres nombreux templates de dashboard Next.js + shadcn/ui disponibles
-- Personnalisation maximale, bundle size reduit
-
----
-
-## Visualisation : Recharts (via shadcn/ui Chart)
-
-**Pourquoi :**
-- Le composant `<Chart>` de shadcn/ui utilise Recharts = theming automatique avec le dark mode
-- Rendu SVG, integration React declarative
-- Couvre tous les besoins du projet :
-
-| Type de graphique | Usage dans l'app |
-|---|---|
-| Ligne | Duree de sommeil dans le temps |
-| Barre | Heures de sommeil par semaine |
-| Aire | Tendances de qualite |
-| Scatter | Correlation cafeine vs sommeil |
-| Pie | Distribution du temps |
-| Radar | Analyse multi-facteurs |
-
-> Si besoin de heatmap (patterns de sommeil), ajouter Nivo en complement.
-
----
-
-## Strategie mobile : PWA (Phase 1) + Capacitor (Phase 2)
-
-### Phase 1 : PWA avec Serwist
-- 100% reutilisation du code web existant
-- Les infirmiers/travailleurs de nuit installent l'app sur leur ecran d'accueil
-- Utilisation hors-ligne (service workers)
-- Effort supplementaire : **aucun**
-
-### Phase 2 : Capacitor
-- 95%+ reutilisation du code web
-- Presence App Store (iOS / Android)
-- Push notifications natives
-- Integration possible avec HealthKit / Google Fit
-- Effort supplementaire : **tres faible**
-
-**Pourquoi pas React Native / Flutter :**
-- Codebase separee = charge de travail inacceptable pour un dev solo
-- 30-60% reutilisation seulement (React Native) ou 0% (Flutter)
-
----
-
-## Hebergement : Vercel
-
-**Pourquoi :**
-- Vercel est le createur de Next.js = meilleur support
-- Deploiement par simple `git push`
-- Region EU disponible
-- Free tier (Hobby plan) suffisant pour la phase dev/beta
-
-**Evolution prevue :**
-- Phase dev/beta : Vercel Hobby (gratuit)
-- Phase commerciale : evaluer OVH VPS pour conformite RGPD donnees de sante (hebergeur francais)
+### Flux d'authentification
+1. Admin s'inscrit (email + mot de passe + nom de l'hopital)
+2. Creation automatique : organisation -> admin_profile -> codes vacation par defaut
+3. Redirect vers `/admin/dashboard`
 
 ---
 
@@ -144,27 +43,40 @@ app-sommeil/
 ├── src/
 │   ├── app/                 # Next.js App Router
 │   │   ├── (auth)/          # Routes publiques (login, register)
-│   │   ├── (dashboard)/     # Routes protegees
-│   │   │   ├── planning/    # Saisie des shifts
-│   │   │   ├── transition/  # Plan de transition jour/nuit
-│   │   │   ├── suivi/       # Suivi sommeil + fatigue
-│   │   │   ├── stats/       # Graphiques et tendances
-│   │   │   └── profil/      # Profil utilisateur
-│   │   ├── api/             # Route Handlers (API)
-│   │   ├── layout.tsx       # Layout racine (dark mode, providers)
-│   │   └── page.tsx         # Landing page
+│   │   ├── (dashboard)/     # Routes protegees (admin)
+│   │   │   ├── admin/
+│   │   │   │   ├── dashboard/   # Tableau de bord principal
+│   │   │   │   ├── employees/   # Gestion employes
+│   │   │   │   ├── planning/    # Vue planning / shifts manuels
+│   │   │   │   ├── import/      # Import CSV
+│   │   │   │   └── settings/    # Parametres organisation + codes vacation
+│   │   ├── api/
+│   │   │   ├── auth/            # Routes auth
+│   │   │   └── admin/           # API admin
+│   │   │       ├── employees/   # CRUD employes
+│   │   │       ├── shifts/      # CRUD shifts + import CSV + bulk
+│   │   │       ├── shift-codes/ # CRUD codes vacation
+│   │   │       └── fatigue/     # Calcul + consultation fatigue
+│   │   ├── layout.tsx       # Layout racine
+│   │   └── page.tsx         # Redirect -> /admin/dashboard
 │   ├── components/
-│   │   ├── ui/              # Composants shadcn/ui (generes)
-│   │   ├── charts/          # Composants graphiques personnalises
-│   │   ├── forms/           # Formulaires (shifts, sommeil, fatigue)
-│   │   └── layout/          # Navbar, Sidebar, Footer
+│   │   ├── ui/              # Composants shadcn/ui
+│   │   ├── charts/          # Graphiques fatigue, shifts, tendances
+│   │   ├── dashboard/       # Composants dashboard (KPI, alertes, table)
+│   │   ├── forms/           # Formulaires (employes, shifts, CSV, rotation)
+│   │   └── layout/          # Navbar, Sidebar, DashboardShell
 │   ├── db/
-│   │   ├── schema.ts        # Schema Drizzle (tables)
+│   │   ├── schema.ts        # Schema Drizzle (toutes tables)
 │   │   ├── migrations/      # Migrations SQL
 │   │   └── index.ts         # Client Drizzle
 │   ├── lib/
 │   │   ├── supabase/        # Clients Supabase (server + browser)
-│   │   ├── planning-engine/ # Moteur de regles transition sommeil
+│   │   ├── planning-engine/ # Moteur de regles (legacy B2C, fonctions reutilisees)
+│   │   ├── fatigue-engine/  # Moteur de calcul de fatigue B2B
+│   │   │   ├── index.ts     # calculateEmployeeFatigue()
+│   │   │   ├── types.ts     # FatigueResult, DailyEstimate, RiskLevel
+│   │   │   ├── estimators.ts # estimateSleepOpportunity()
+│   │   │   └── __tests__/   # Tests unitaires Vitest
 │   │   ├── validators/      # Schemas Zod
 │   │   └── utils.ts         # Utilitaires
 │   ├── hooks/               # Custom React hooks
@@ -172,7 +84,6 @@ app-sommeil/
 ├── drizzle.config.ts        # Configuration Drizzle
 ├── tailwind.config.ts       # Configuration Tailwind
 ├── next.config.ts           # Configuration Next.js
-├── .env.local               # Variables d'environnement (local)
 └── package.json
 ```
 
@@ -180,114 +91,143 @@ app-sommeil/
 
 ## Modele de donnees (tables Supabase)
 
-### `profiles`
+### `organizations`
 | Colonne | Type | Description |
-|---|---|---|
-| id | uuid (PK, FK auth.users) | ID utilisateur Supabase |
-| display_name | text | Nom affiche |
-| age | integer | Age |
-| gender | text | Genre |
-| profession | text | Metier |
-| habitual_sleep_time | time | Heure de coucher habituelle |
-| habitual_wake_time | time | Heure de lever habituelle |
+|---------|------|-------------|
+| id | uuid (PK) | Identifiant unique |
+| name | text NOT NULL | Nom de l'hopital |
 | created_at | timestamptz | Date de creation |
 | updated_at | timestamptz | Date de mise a jour |
 
+### `admin_profiles`
+| Colonne | Type | Description |
+|---------|------|-------------|
+| id | uuid (PK, FK auth.users) | ID utilisateur Supabase |
+| organization_id | uuid (FK organizations) | Hopital de l'admin |
+| display_name | text | Nom affiche |
+| email | text | Email |
+| role | text DEFAULT 'admin' | Role (admin, viewer...) |
+| created_at | timestamptz | Date de creation |
+
+### `employees`
+| Colonne | Type | Description |
+|---------|------|-------------|
+| id | uuid (PK) | Identifiant unique |
+| organization_id | uuid (FK organizations) | Hopital |
+| matricule | text | Identifiant interne hopital |
+| first_name | text NOT NULL | Prenom |
+| last_name | text NOT NULL | Nom |
+| department | text | Service |
+| position | text | Poste/fonction |
+| employment_type | text | temps_plein / temps_partiel / interimaire |
+| contract_hours_per_week | numeric | Heures contractuelles/semaine |
+| habitual_sleep_time | time DEFAULT '23:00' | Heure coucher estimee |
+| habitual_wake_time | time DEFAULT '07:00' | Heure lever estimee |
+| is_active | boolean DEFAULT true | Soft delete |
+| created_at / updated_at | timestamptz | Timestamps |
+
+### `shift_codes`
+| Colonne | Type | Description |
+|---------|------|-------------|
+| id | uuid (PK) | Identifiant unique |
+| organization_id | uuid (FK organizations) | Hopital |
+| code | text NOT NULL | Code vacation |
+| label | text | Libelle |
+| shift_category | text NOT NULL | jour / soir / nuit / repos / absence |
+| default_start_time | time | Heure debut par defaut |
+| default_end_time | time | Heure fin par defaut |
+| default_duration_minutes | integer | Duree par defaut |
+| includes_break_minutes | integer DEFAULT 0 | Pause incluse |
+| is_work_shift | boolean DEFAULT true | Travail ou repos |
+
 ### `work_shifts`
 | Colonne | Type | Description |
-|---|---|---|
+|---------|------|-------------|
 | id | uuid (PK) | Identifiant unique |
-| user_id | uuid (FK profiles) | Proprietaire |
+| organization_id | uuid (FK organizations) | Hopital |
+| employee_id | uuid (FK employees) | Employe |
 | start_date | date | Date de debut |
 | end_date | date | Date de fin |
-| shift_type | text | Type de shift (jour, soir, nuit) |
-| start_time | time | Heure de debut du shift |
-| end_time | time | Heure de fin du shift |
-| created_at | timestamptz | Date de creation |
-
-### `transition_plans`
-| Colonne | Type | Description |
-|---|---|---|
-| id | uuid (PK) | Identifiant unique |
-| user_id | uuid (FK profiles) | Proprietaire |
-| from_shift | text | Shift de depart |
-| to_shift | text | Shift d'arrivee |
-| start_date | date | Date de debut du plan |
-| days_count | integer | Nombre de jours (2-5) |
-| created_at | timestamptz | Date de creation |
-
-### `plan_days`
-| Colonne | Type | Description |
-|---|---|---|
-| id | uuid (PK) | Identifiant unique |
-| plan_id | uuid (FK transition_plans) | Plan parent |
-| day_number | integer | Jour dans le plan (1, 2, 3...) |
-| target_sleep_time | time | Heure coucher cible |
-| target_wake_time | time | Heure lever cible |
-| caffeine_cutoff | time | Heure stop cafeine |
-| light_start | time | Debut fenetre lumiere |
-| light_end | time | Fin fenetre lumiere |
-| notes | text | Conseils du jour |
-
-### `sleep_records`
-| Colonne | Type | Description |
-|---|---|---|
-| id | uuid (PK) | Identifiant unique |
-| user_id | uuid (FK profiles) | Proprietaire |
-| date | date | Date de la nuit |
-| actual_sleep_start | timestamptz | Heure d'endormissement reelle |
-| actual_sleep_end | timestamptz | Heure de reveil reelle |
-| quality | integer | Qualite ressentie (1-5) |
-| source | text | Source (manual, healthkit, google_fit) |
+| shift_type | text | Type normalise (jour/soir/nuit) |
+| start_time | time | Heure de debut |
+| end_time | time | Heure de fin |
+| shift_code | text | Code original CSV |
+| break_minutes | integer DEFAULT 0 | Duree pause |
 | created_at | timestamptz | Date de creation |
 
 ### `fatigue_scores`
 | Colonne | Type | Description |
-|---|---|---|
+|---------|------|-------------|
 | id | uuid (PK) | Identifiant unique |
-| user_id | uuid (FK profiles) | Proprietaire |
-| date | date | Date |
-| score | integer | Score de fatigue (1-10) |
-| note | text | Commentaire optionnel |
-| created_at | timestamptz | Date de creation |
+| employee_id | uuid (FK employees) | Employe |
+| organization_id | uuid (FK organizations) | Hopital |
+| calculated_at | timestamptz | Date de calcul |
+| period_start | date | Debut fenetre |
+| period_end | date | Fin fenetre |
+| window_days | integer | 7, 14 ou 30 jours |
+| cumulative_deficit_minutes | integer | Deficit cumule |
+| recovery_score | integer | Score recuperation (0-100) |
+| risk_level | text | low / medium / high / critical |
+| shift_count | integer | Nombre de shifts |
+| night_shift_count | integer | Nombre de nuits |
 
-### `caffeine_logs`
-| Colonne | Type | Description |
-|---|---|---|
-| id | uuid (PK) | Identifiant unique |
-| user_id | uuid (FK profiles) | Proprietaire |
-| consumed_at | timestamptz | Heure de consommation |
-| type | text | Type (cafe, the, energy_drink) |
-| amount_mg | integer | Quantite de cafeine en mg |
-
-> Toutes les tables ont des politiques RLS activees : chaque utilisateur ne voit que ses propres donnees.
+> **Tables legacy B2C** (profiles, transition_plans, plan_days) restent en DB mais ne sont plus referencees.
+> Toutes les nouvelles tables ont des politiques RLS activees par `organization_id`.
 
 ---
 
-## Couts
+## Moteur de calcul de fatigue
 
-### Phase dev / beta : $0/mois
+### Algorithme
+Pour chaque employe, sur une fenetre glissante :
+1. Recuperer les shifts de la periode
+2. Estimer l'opportunite de sommeil par jour selon le type de shift
+3. Calculer le deficit quotidien
+4. Appliquer le score de recuperation (repos reduit le deficit de ~50%)
+5. Facteurs aggravants : nuits consecutives, quick return, overtime
+6. Determiner le niveau de risque
 
-| Service | Tier | Limites |
-|---|---|---|
-| Vercel | Hobby (gratuit) | 100 GB bandwidth, builds illimites |
-| Supabase | Free | 500 MB DB, 50K MAU, 1 GB storage |
-| **Total** | **$0/mois** | |
+### Seuils de risque
 
-### Phase commerciale : ~$45/mois
+| Niveau | Seuil deficit 7j | Description |
+|--------|-------------------|-------------|
+| LOW | < 120 min | Situation normale |
+| MEDIUM | 120-240 min | Vigilance requise |
+| HIGH | 240-480 min | Action recommandee |
+| CRITICAL | > 480 min | Intervention urgente |
 
-| Service | Tier | Cout |
-|---|---|---|
-| Vercel | Pro | $20/mois |
-| Supabase | Pro | $25/mois (8 GB DB, 100K MAU, 100 GB storage) |
-| **Total** | **~$45/mois** | |
+### Declenchement
+- Ouverture du dashboard (si donnees > 1h)
+- Apres import CSV (automatique)
+- Bouton "Recalculer" manuel
 
-### Option RGPD donnees de sante
+---
 
-| Service | Tier | Cout |
-|---|---|---|
-| OVH VPS | Comfort | $5-10/mois (hebergement francais, conformite RGPD) |
-| Supabase | Self-hosted sur OVH | Gratuit (open source) |
+## Import CSV
+
+### Formats supportes
+- **Francais** (Octime, Chronos) : point-virgule, DD/MM/YYYY
+- **International** (Kronos, NurseGrid) : virgule, YYYY-MM-DD
+- **Minimal** : matricule + date + code vacation
+
+### Auto-detection
+- Separateur, encodage (UTF-8/Windows-1252), format date
+
+### Mapping colonnes
+Dictionnaire de noms reconnus automatiquement (Matricule, Nom, Prenom, Service, Date, Code, etc.)
+
+---
+
+## Navigation
+
+```
+/admin/dashboard      -> Tableau de bord (KPI, alertes, charts)
+/admin/employees      -> Liste employes (CRUD, filtres par service)
+/admin/employees/[id] -> Detail employe (fatigue, historique)
+/admin/planning       -> Vue planning multi-employes
+/admin/import         -> Import CSV
+/admin/settings       -> Parametres organisation + codes vacation
+```
 
 ---
 
@@ -309,3 +249,25 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 > **Securite** : Ne jamais commiter `.env.local`. Le fichier `.gitignore` doit contenir `.env*.local`.
 > `NEXT_PUBLIC_*` sont exposees cote client (cles publiques uniquement).
 > `SUPABASE_SERVICE_ROLE_KEY` et `DATABASE_URL` ne doivent jamais etre exposees cote client.
+
+---
+
+## Couts
+
+### Phase dev / beta : $0/mois
+| Service | Tier | Limites |
+|---------|------|---------|
+| Vercel | Hobby (gratuit) | 100 GB bandwidth |
+| Supabase | Free | 500 MB DB, 50K MAU |
+
+### Phase commerciale : ~$45/mois
+| Service | Tier | Cout |
+|---------|------|------|
+| Vercel | Pro | $20/mois |
+| Supabase | Pro | $25/mois |
+
+---
+
+## Documentation
+- [PRD.md](./PRD.md) - Product Requirements Document B2B
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Ce document
