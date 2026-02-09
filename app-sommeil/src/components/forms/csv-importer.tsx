@@ -82,6 +82,7 @@ interface ProcessedRow {
   statusMessage: string;
   // Resolved data
   employeeId: string | null;
+  newEmployeeKey: string | null; // cle pour les employes a auto-creer
   employeeName: string;
   date: string;
   shiftCode: string;
@@ -165,11 +166,17 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
   const [processedRows, setProcessedRows] = useState<ProcessedRow[]>([]);
   const [unknownCodes, setUnknownCodes] = useState<string[]>([]);
 
+  // Auto-create employees
+  const [newEmployeesFromCsv, setNewEmployeesFromCsv] = useState<
+    { key: string; matricule?: string; firstName: string; lastName: string; department?: string; position?: string }[]
+  >([]);
+
   // Import result
   const [importResult, setImportResult] = useState<{
     inserted: number;
     total: number;
     skipped: number;
+    employeesCreated: number;
   } | null>(null);
 
   // ── Helpers ──────────────────────────────────────────────────────────
@@ -182,9 +189,11 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
         return rawRows.length > 0;
       case "parse":
         return rawHeaders.length > 0;
-      case "mapping":
-        return !!columnMapping["date"] && !!columnMapping["shiftCode"] &&
-          (!!columnMapping["matricule"] || (!!columnMapping["firstName"] && !!columnMapping["lastName"]));
+      case "mapping": {
+        const mappedFields = new Set(Object.values(columnMapping));
+        return mappedFields.has("date") && mappedFields.has("shiftCode") &&
+          (mappedFields.has("matricule") || (mappedFields.has("firstName") && mappedFields.has("lastName")));
+      }
       case "employees":
         return employees.length > 0;
       case "shiftCodes":
@@ -373,6 +382,7 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
 
     const unknowns = new Set<string>();
     const rows: ProcessedRow[] = [];
+    const newEmployeesMap = new Map<string, { key: string; matricule?: string; firstName: string; lastName: string; department?: string; position?: string }>();
 
     for (let i = 0; i < rawRows.length; i++) {
       const raw = rawRows[i];
@@ -386,6 +396,8 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
       const matriculeVal = getVal(raw, "matricule");
       const firstNameVal = getVal(raw, "firstName");
       const lastNameVal = getVal(raw, "lastName");
+      const departmentVal = getVal(raw, "department");
+      const positionVal = getVal(raw, "position");
 
       if (matriculeVal) {
         matchedEmployee = empByMatricule.get(matriculeVal.toLowerCase());
@@ -394,6 +406,25 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
         matchedEmployee = empByName.get(
           `${firstNameVal.toLowerCase()}|${lastNameVal.toLowerCase()}`
         );
+      }
+
+      // Si non trouve, preparer l'auto-creation
+      let newEmployeeKey: string | null = null;
+      if (!matchedEmployee && (firstNameVal || matriculeVal)) {
+        newEmployeeKey = matriculeVal
+          ? `mat:${matriculeVal.toLowerCase()}`
+          : `name:${firstNameVal.toLowerCase()}|${lastNameVal.toLowerCase()}`;
+
+        if (!newEmployeesMap.has(newEmployeeKey)) {
+          newEmployeesMap.set(newEmployeeKey, {
+            key: newEmployeeKey,
+            matricule: matriculeVal || undefined,
+            firstName: firstNameVal,
+            lastName: lastNameVal,
+            department: departmentVal || undefined,
+            position: positionVal || undefined,
+          });
+        }
       }
 
       // 2. Resolve shift code
@@ -437,9 +468,14 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
       let status: RowStatus = "valid";
       let statusMessage = "";
 
-      if (!matchedEmployee) {
+      if (!matchedEmployee && !newEmployeeKey) {
+        // Pas assez d'info pour identifier l'employe
         status = "error";
-        statusMessage = `Employe non trouve${matriculeVal ? ` (matricule: ${matriculeVal})` : ""}${firstNameVal ? ` (nom: ${firstNameVal} ${lastNameVal})` : ""}`;
+        statusMessage = "Impossible d'identifier l'employe (pas de matricule ni nom/prenom)";
+      } else if (!matchedEmployee && newEmployeeKey) {
+        // Auto-creation possible
+        status = "valid";
+        statusMessage = "Nouvel employe (creation auto)";
       } else if (!parsedDate) {
         status = "error";
         statusMessage = "Date manquante ou invalide";
@@ -460,6 +496,7 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
         status,
         statusMessage,
         employeeId: matchedEmployee?.id ?? null,
+        newEmployeeKey,
         employeeName: matchedEmployee
           ? `${matchedEmployee.lastName} ${matchedEmployee.firstName}`
           : firstNameVal && lastNameVal
@@ -476,12 +513,13 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
 
     setProcessedRows(rows);
     setUnknownCodes(Array.from(unknowns));
+    setNewEmployeesFromCsv(Array.from(newEmployeesMap.values()));
   }
 
   // ── Step 7: Import ─────────────────────────────────────────────────
 
   async function handleImport() {
-    const validRows = processedRows.filter((r) => r.status !== "error" && r.employeeId);
+    const validRows = processedRows.filter((r) => r.status !== "error");
 
     if (validRows.length === 0) {
       toast.error("Aucune ligne valide a importer");
@@ -491,7 +529,8 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
     setProcessing(true);
     try {
       const importRows = validRows.map((r) => ({
-        employeeId: r.employeeId!,
+        employeeId: r.employeeId || undefined,
+        newEmployeeKey: r.newEmployeeKey || undefined,
         startDate: r.date,
         shiftType: r.shiftCategory,
         startTime: r.startTime,
@@ -503,7 +542,10 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
       const res = await fetch("/api/admin/shifts/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: importRows }),
+        body: JSON.stringify({
+          rows: importRows,
+          newEmployees: newEmployeesFromCsv,
+        }),
       });
 
       if (!res.ok) {
@@ -513,13 +555,17 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
       }
 
       const data = await res.json();
+      const empCreatedMsg = data.employeesCreated > 0
+        ? ` (${data.employeesCreated} employe(s) cree(s))`
+        : "";
       setImportResult({
         inserted: data.inserted,
         total: processedRows.length,
         skipped: processedRows.length - data.inserted,
+        employeesCreated: data.employeesCreated ?? 0,
       });
       setStep("confirm");
-      toast.success(`${data.inserted} shift(s) importes avec succes`);
+      toast.success(`${data.inserted} shift(s) importes avec succes${empCreatedMsg}`);
     } catch {
       toast.error("Erreur lors de l'import");
     } finally {
@@ -714,13 +760,14 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
     }
 
     let matched = 0;
-    let unmatched = 0;
-    const unmatchedSamples: string[] = [];
+    let autoCreate = 0;
+    const autoCreateEmployees = new Map<string, { name: string; matricule?: string; department?: string }>();
 
     for (const row of rawRows) {
       const mat = getVal(row, "matricule");
       const fn = getVal(row, "firstName");
       const ln = getVal(row, "lastName");
+      const dept = getVal(row, "department");
 
       let found = false;
       if (mat && empByMatricule.has(mat.toLowerCase())) found = true;
@@ -729,14 +776,19 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
       if (found) {
         matched++;
       } else {
-        unmatched++;
-        if (unmatchedSamples.length < 5) {
-          unmatchedSamples.push(
-            mat ? `Matricule: ${mat}` : `${ln} ${fn}`
-          );
+        autoCreate++;
+        const key = mat ? `mat:${mat}` : `name:${fn}|${ln}`;
+        if (!autoCreateEmployees.has(key)) {
+          autoCreateEmployees.set(key, {
+            name: `${fn} ${ln}`,
+            matricule: mat || undefined,
+            department: dept || undefined,
+          });
         }
       }
     }
+
+    const newEmpCount = autoCreateEmployees.size;
 
     return (
       <div className="space-y-4">
@@ -745,38 +797,47 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold">{employees.length}</p>
-                <p className="text-xs text-muted-foreground">Employes dans l&apos;organisation</p>
+                <p className="text-xs text-muted-foreground">Employes existants</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-green-500">{matched}</p>
-                <p className="text-xs text-muted-foreground">Lignes matchees</p>
+                <p className="text-xs text-muted-foreground">Lignes deja matchees</p>
               </div>
               <div>
-                <p className={`text-2xl font-bold ${unmatched > 0 ? "text-orange-500" : ""}`}>
-                  {unmatched}
+                <p className={`text-2xl font-bold ${newEmpCount > 0 ? "text-blue-500" : ""}`}>
+                  {newEmpCount}
                 </p>
-                <p className="text-xs text-muted-foreground">Lignes non matchees</p>
+                <p className="text-xs text-muted-foreground">Nouveaux employes</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {unmatched > 0 && unmatchedSamples.length > 0 && (
+        {newEmpCount > 0 && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-orange-500" />
-                Exemples d&apos;employes non trouves
+                <CheckCircle2 className="h-4 w-4 text-blue-500" />
+                {newEmpCount} employe(s) seront crees automatiquement
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {unmatchedSamples.map((s, i) => (
-                  <li key={i}>{s}</li>
+              <div className="space-y-1.5">
+                {Array.from(autoCreateEmployees.values()).map((emp, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <Badge variant="outline" className="text-blue-500 border-blue-500/50">nouveau</Badge>
+                    <span>{emp.name}</span>
+                    {emp.matricule && (
+                      <span className="text-xs text-muted-foreground">#{emp.matricule}</span>
+                    )}
+                    {emp.department && (
+                      <Badge variant="secondary" className="text-xs">{emp.department}</Badge>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
               <p className="text-xs text-muted-foreground mt-3">
-                Les lignes non matchees seront marquees en erreur et ne seront pas importees.
+                Ces employes seront ajoutes a votre organisation lors de l&apos;import.
               </p>
             </CardContent>
           </Card>
@@ -1014,7 +1075,7 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
           <CardContent className="pt-6 text-center">
             <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Import termine</h3>
-            <div className="grid grid-cols-3 gap-4 mt-6">
+            <div className={`grid gap-4 mt-6 ${importResult.employeesCreated > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
               <div>
                 <p className="text-2xl font-bold">{importResult.total}</p>
                 <p className="text-xs text-muted-foreground">Lignes totales</p>
@@ -1023,8 +1084,16 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
                 <p className="text-2xl font-bold text-green-500">
                   {importResult.inserted}
                 </p>
-                <p className="text-xs text-muted-foreground">Importees</p>
+                <p className="text-xs text-muted-foreground">Shifts importes</p>
               </div>
+              {importResult.employeesCreated > 0 && (
+                <div>
+                  <p className="text-2xl font-bold text-blue-500">
+                    {importResult.employeesCreated}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Employes crees</p>
+                </div>
+              )}
               <div>
                 <p className="text-2xl font-bold text-muted-foreground">
                   {importResult.skipped}

@@ -17,8 +17,18 @@ async function getOrgId() {
   return admin?.organizationId ?? null;
 }
 
+interface NewEmployeeData {
+  key: string; // identifiant unique pour le matching (ex: "mat:10002" ou "name:jean|martin")
+  matricule?: string;
+  firstName: string;
+  lastName: string;
+  department?: string;
+  position?: string;
+}
+
 interface ImportRow {
-  employeeId: string;
+  employeeId?: string;
+  newEmployeeKey?: string; // reference vers un newEmployee.key si auto-creation
   startDate: string;
   shiftType: string;
   startTime: string;
@@ -27,7 +37,7 @@ interface ImportRow {
   breakMinutes?: number;
 }
 
-// POST /api/admin/shifts/import — Import CSV (lignes déjà parsées)
+// POST /api/admin/shifts/import — Import CSV avec auto-creation des employes
 export async function POST(request: NextRequest) {
   const orgId = await getOrgId();
   if (!orgId) {
@@ -36,6 +46,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const rows: ImportRow[] = body.rows;
+  const newEmployees: NewEmployeeData[] = body.newEmployees ?? [];
 
   if (!rows || !Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json(
@@ -44,19 +55,59 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Valider les champs requis de chaque ligne
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row.employeeId || !row.startDate || !row.shiftType || !row.startTime || !row.endTime) {
-      return NextResponse.json(
-        { error: `Ligne ${i + 1} : champs requis manquants (employeeId, startDate, shiftType, startTime, endTime)` },
-        { status: 400 }
-      );
+  // 1. Auto-creer les nouveaux employes
+  const keyToEmployeeId = new Map<string, string>();
+
+  if (newEmployees.length > 0) {
+    for (const emp of newEmployees) {
+      if (!emp.firstName || !emp.lastName) continue;
+
+      const [created] = await db
+        .insert(employees)
+        .values({
+          organizationId: orgId,
+          matricule: emp.matricule || null,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          department: emp.department || null,
+          position: emp.position || null,
+          employmentType: "temps_plein",
+          contractHoursPerWeek: "35",
+          habitualSleepTime: "23:00",
+          habitualWakeTime: "07:00",
+          isActive: true,
+        })
+        .returning();
+
+      if (created) {
+        keyToEmployeeId.set(emp.key, created.id);
+      }
     }
   }
 
-  // Vérifier que tous les employeeIds appartiennent à l'organisation
-  const uniqueEmployeeIds = [...new Set(rows.map((r) => r.employeeId))];
+  // 2. Resoudre les employeeId pour chaque ligne
+  const resolvedRows = rows.map((row) => {
+    let employeeId = row.employeeId;
+    if (!employeeId && row.newEmployeeKey) {
+      employeeId = keyToEmployeeId.get(row.newEmployeeKey) ?? undefined;
+    }
+    return { ...row, employeeId };
+  });
+
+  // 3. Valider les champs requis
+  const validRows = resolvedRows.filter((row) => {
+    return row.employeeId && row.startDate && row.shiftType && row.startTime && row.endTime;
+  });
+
+  if (validRows.length === 0) {
+    return NextResponse.json(
+      { error: "Aucune ligne valide après résolution des employés" },
+      { status: 400 }
+    );
+  }
+
+  // 4. Verifier que tous les employeeIds appartiennent a l'organisation
+  const uniqueEmployeeIds = [...new Set(validRows.map((r) => r.employeeId!))];
 
   const orgEmployees = await db
     .select({ id: employees.id })
@@ -69,21 +120,21 @@ export async function POST(request: NextRequest) {
     );
 
   const validEmployeeIds = new Set(orgEmployees.map((e) => e.id));
-  const invalidIds = uniqueEmployeeIds.filter((id) => !validEmployeeIds.has(id));
+  const finalRows = validRows.filter((r) => validEmployeeIds.has(r.employeeId!));
 
-  if (invalidIds.length > 0) {
+  if (finalRows.length === 0) {
     return NextResponse.json(
-      { error: `Employés non trouvés dans cette organisation : ${invalidIds.join(", ")}` },
+      { error: "Aucun employé valide trouvé dans cette organisation" },
       { status: 400 }
     );
   }
 
-  // Bulk insert
-  const values = rows.map((row) => ({
+  // 5. Bulk insert shifts
+  const values = finalRows.map((row) => ({
     organizationId: orgId,
-    employeeId: row.employeeId,
+    employeeId: row.employeeId!,
     startDate: row.startDate,
-    endDate: row.startDate, // single-day shift pour B2B
+    endDate: row.startDate,
     shiftType: row.shiftType,
     startTime: row.startTime,
     endTime: row.endTime,
@@ -97,7 +148,11 @@ export async function POST(request: NextRequest) {
     .returning();
 
   return NextResponse.json(
-    { inserted: inserted.length, shifts: inserted },
+    {
+      inserted: inserted.length,
+      employeesCreated: keyToEmployeeId.size,
+      shifts: inserted,
+    },
     { status: 201 }
   );
 }

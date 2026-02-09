@@ -23,19 +23,24 @@ import {
 import { toast } from "sonner";
 import type { Employee, ShiftCode } from "@/types";
 
-interface WorkShift {
-  id: string;
-  employeeId: string;
-  startDate: string;
-  shiftType: string;
-  startTime: string;
-  endTime: string;
-  shiftCode: string | null;
-  breakMinutes: number;
+interface ShiftRow {
+  shift: {
+    id: string;
+    employeeId: string;
+    startDate: string;
+    shiftType: string;
+    startTime: string;
+    endTime: string;
+    shiftCode: string | null;
+    breakMinutes: number;
+  };
+  employeeFirstName: string;
+  employeeLastName: string;
+  employeeDepartment: string | null;
 }
 
 export function PlanningClient() {
-  const [shifts, setShifts] = useState<WorkShift[]>([]);
+  const [shiftRows, setShiftRows] = useState<ShiftRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shiftCodes, setShiftCodes] = useState<ShiftCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +63,7 @@ export function PlanningClient() {
         fetch("/api/admin/employees"),
         fetch("/api/admin/shift-codes"),
       ]);
-      if (shiftsRes.ok) setShifts(await shiftsRes.json());
+      if (shiftsRes.ok) setShiftRows(await shiftsRes.json());
       if (empRes.ok) setEmployees(await empRes.json());
       if (codesRes.ok) setShiftCodes(await codesRes.json());
     } finally {
@@ -117,16 +122,13 @@ export function PlanningClient() {
     }
   }
 
-  const empMap = new Map(employees.map((e) => [e.id, e]));
-  const departments = [...new Set(employees.map((e) => e.department).filter(Boolean))];
+  const departments = [...new Set(shiftRows.map((r) => r.employeeDepartment).filter(Boolean))];
 
-  const filtered = shifts.filter((s) => {
-    const emp = empMap.get(s.employeeId);
-    if (!emp) return false;
-    if (filterDept !== "all" && emp.department !== filterDept) return false;
+  const filtered = shiftRows.filter((r) => {
+    if (filterDept !== "all" && r.employeeDepartment !== filterDept) return false;
     if (search) {
       const q = search.toLowerCase();
-      const nameMatch = `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(q);
+      const nameMatch = `${r.employeeFirstName} ${r.employeeLastName}`.toLowerCase().includes(q);
       if (!nameMatch) return false;
     }
     return true;
@@ -228,23 +230,23 @@ export function PlanningClient() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {filtered.map((shift) => {
-            const emp = empMap.get(shift.employeeId);
+          {filtered.map((row) => {
+            const s = row.shift;
             return (
-              <Card key={shift.id}>
+              <Card key={s.id}>
                 <CardContent className="flex items-center justify-between py-3">
                   <div>
                     <p className="font-medium">
-                      {emp ? `${emp.firstName} ${emp.lastName}` : "Inconnu"}
+                      {row.employeeFirstName} {row.employeeLastName}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {shift.startDate} — {shift.startTime} → {shift.endTime}
+                      {s.startDate} — {s.startTime} → {s.endTime}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {shift.shiftCode && <Badge variant="outline">{shift.shiftCode}</Badge>}
-                    <Badge variant="secondary">{shift.shiftType}</Badge>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(shift.id)}>
+                    {s.shiftCode && <Badge variant="outline">{s.shiftCode}</Badge>}
+                    <Badge variant="secondary">{s.shiftType}</Badge>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
