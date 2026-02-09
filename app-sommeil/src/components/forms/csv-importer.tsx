@@ -176,6 +176,7 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
     inserted: number;
     total: number;
     skipped: number;
+    duplicatesSkipped: number;
     employeesCreated: number;
   } | null>(null);
 
@@ -555,17 +556,22 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
       }
 
       const data = await res.json();
-      const empCreatedMsg = data.employeesCreated > 0
-        ? ` (${data.employeesCreated} employe(s) cree(s))`
+      const dupMsg = data.duplicatesSkipped > 0
+        ? `, ${data.duplicatesSkipped} doublon(s) ignore(s)`
         : "";
+      const empMsg = data.employeesCreated > 0
+        ? `, ${data.employeesCreated} employe(s) cree(s)`
+        : "";
+      const errorRows = processedRows.filter((r) => r.status === "error").length;
       setImportResult({
         inserted: data.inserted,
         total: processedRows.length,
-        skipped: processedRows.length - data.inserted,
+        skipped: errorRows,
+        duplicatesSkipped: data.duplicatesSkipped ?? 0,
         employeesCreated: data.employeesCreated ?? 0,
       });
       setStep("confirm");
-      toast.success(`${data.inserted} shift(s) importes avec succes${empCreatedMsg}`);
+      toast.success(`${data.inserted} shift(s) importes avec succes${empMsg}${dupMsg}`);
     } catch {
       toast.error("Erreur lors de l'import");
     } finally {
@@ -1075,7 +1081,7 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
           <CardContent className="pt-6 text-center">
             <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Import termine</h3>
-            <div className={`grid gap-4 mt-6 ${importResult.employeesCreated > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-6">
               <div>
                 <p className="text-2xl font-bold">{importResult.total}</p>
                 <p className="text-xs text-muted-foreground">Lignes totales</p>
@@ -1094,12 +1100,22 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
                   <p className="text-xs text-muted-foreground">Employes crees</p>
                 </div>
               )}
-              <div>
-                <p className="text-2xl font-bold text-muted-foreground">
-                  {importResult.skipped}
-                </p>
-                <p className="text-xs text-muted-foreground">Ignorees</p>
-              </div>
+              {importResult.duplicatesSkipped > 0 && (
+                <div>
+                  <p className="text-2xl font-bold text-yellow-500">
+                    {importResult.duplicatesSkipped}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Doublons ignores</p>
+                </div>
+              )}
+              {importResult.skipped > 0 && (
+                <div>
+                  <p className="text-2xl font-bold text-muted-foreground">
+                    {importResult.skipped}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Erreurs ignorees</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

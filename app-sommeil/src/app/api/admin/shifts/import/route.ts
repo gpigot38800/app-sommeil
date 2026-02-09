@@ -129,27 +129,64 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 5. Bulk insert shifts
-  const values = finalRows.map((row) => ({
-    organizationId: orgId,
-    employeeId: row.employeeId!,
-    startDate: row.startDate,
-    endDate: row.startDate,
-    shiftType: row.shiftType,
-    startTime: row.startTime,
-    endTime: row.endTime,
-    shiftCode: row.shiftCode || null,
-    breakMinutes: row.breakMinutes || 0,
-  }));
+  // 5. Detecter les doublons existants (employeeId + startDate + startTime + endTime)
+  const existingShifts = await db
+    .select({
+      employeeId: workShifts.employeeId,
+      startDate: workShifts.startDate,
+      startTime: workShifts.startTime,
+      endTime: workShifts.endTime,
+    })
+    .from(workShifts)
+    .where(
+      and(
+        eq(workShifts.organizationId, orgId),
+        inArray(workShifts.employeeId, uniqueEmployeeIds)
+      )
+    );
 
-  const inserted = await db
-    .insert(workShifts)
-    .values(values)
-    .returning();
+  // Normaliser les temps en HH:MM (DB retourne HH:MM:SS, CSV envoie HH:MM)
+  const normalizeTime = (t: string | null) => t?.slice(0, 5) ?? "";
+
+  const existingKeys = new Set(
+    existingShifts.map(
+      (s) => `${s.employeeId}|${s.startDate}|${normalizeTime(s.startTime)}|${normalizeTime(s.endTime)}`
+    )
+  );
+
+  const newRows = finalRows.filter((row) => {
+    const key = `${row.employeeId}|${row.startDate}|${normalizeTime(row.startTime)}|${normalizeTime(row.endTime)}`;
+    return !existingKeys.has(key);
+  });
+
+  const duplicatesSkipped = finalRows.length - newRows.length;
+
+  // 6. Bulk insert shifts (sans doublons)
+  let inserted: typeof workShifts.$inferSelect[] = [];
+
+  if (newRows.length > 0) {
+    const values = newRows.map((row) => ({
+      organizationId: orgId,
+      employeeId: row.employeeId!,
+      startDate: row.startDate,
+      endDate: row.startDate,
+      shiftType: row.shiftType,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      shiftCode: row.shiftCode || null,
+      breakMinutes: row.breakMinutes || 0,
+    }));
+
+    inserted = await db
+      .insert(workShifts)
+      .values(values)
+      .returning();
+  }
 
   return NextResponse.json(
     {
       inserted: inserted.length,
+      duplicatesSkipped,
       employeesCreated: keyToEmployeeId.size,
       shifts: inserted,
     },
