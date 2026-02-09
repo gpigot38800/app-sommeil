@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertBanner } from "@/components/dashboard/alert-banner";
+import { ComplianceSummary } from "@/components/dashboard/compliance-summary";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { EmployeeOverviewTable } from "@/components/dashboard/employee-overview-table";
 import { DepartmentSummary } from "@/components/dashboard/department-summary";
@@ -11,6 +12,7 @@ import { ShiftDistributionPie } from "@/components/charts/shift-distribution-pie
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { RiskLevel } from "@/types";
+import type { ComplianceViolation } from "@/lib/compliance-engine/types";
 
 interface OverviewItem {
   employee: {
@@ -31,14 +33,30 @@ interface OverviewItem {
 
 export function DashboardClient() {
   const [data, setData] = useState<OverviewItem[]>([]);
+  const [complianceData, setComplianceData] = useState<
+    { employeeId: string; employeeName: string; department: string | null; violations: ComplianceViolation[] }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
 
   const fetchOverview = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/fatigue/overview");
+      // Dates pour compliance : 7 derniers jours
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 7);
+      const startStr = startDate.toISOString().split("T")[0];
+      const endStr = endDate.toISOString().split("T")[0];
+
+      const [res, compRes] = await Promise.all([
+        fetch("/api/admin/fatigue/overview"),
+        fetch(`/api/admin/compliance?startDate=${startStr}&endDate=${endStr}`),
+      ]);
       if (res.ok) {
         setData(await res.json());
+      }
+      if (compRes.ok) {
+        setComplianceData(await compRes.json());
       }
     } finally {
       setLoading(false);
@@ -148,11 +166,14 @@ export function DashboardClient() {
 
       <AlertBanner criticalCount={criticalCount} highCount={highCount} />
 
+      <ComplianceSummary data={complianceData} />
+
       <KpiCards
         totalEmployees={totalEmployees}
         averageFatigue={avgRecovery}
         alertCount={alertCount}
         nightShiftCount={nightShiftTotal}
+        complianceViolationCount={complianceData.reduce((sum, d) => sum + d.violations.length, 0)}
       />
 
       <EmployeeOverviewTable data={data} />
