@@ -1,3 +1,5 @@
+/** Utilitaires de dates pour la navigation semaine du planning */
+
 /** Retourne le lundi de la semaine contenant `date` */
 export function getWeekStart(date: Date): Date {
   const d = new Date(date);
