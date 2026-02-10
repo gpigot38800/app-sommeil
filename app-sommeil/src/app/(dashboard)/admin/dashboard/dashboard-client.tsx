@@ -71,7 +71,7 @@ export function DashboardClient() {
   const barData = withFatigue
     .filter((d) => d.fatigue && d.fatigue.cumulativeDeficitMinutes > 0)
     .map((d) => ({
-      name: `${d.employee.firstName} ${d.employee.lastName.charAt(0)}.`,
+      name: `${d.employee.firstName} ${d.employee.lastName}`,
       deficit: Math.round((d.fatigue?.cumulativeDeficitMinutes ?? 0) / 60),
       riskLevel: (d.fatigue?.riskLevel ?? "low") as RiskLevel,
     }))

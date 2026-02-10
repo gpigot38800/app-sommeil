@@ -10,6 +10,7 @@ import {
   Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTheme } from "next-themes";
 import type { RiskLevel } from "@/types";
 
 interface FatigueBarData {
@@ -30,6 +31,10 @@ const riskColors: Record<RiskLevel, string> = {
 };
 
 export function FatigueBarChart({ data }: FatigueBarChartProps) {
+  const { theme, resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark" || theme === "dark";
+  const textColor = isDark ? "#ffffff" : "#000000";
+
   if (data.length === 0) return null;
 
   return (
@@ -38,17 +43,17 @@ export function FatigueBarChart({ data }: FatigueBarChartProps) {
         <CardTitle className="text-base">Déficit de sommeil par employé (heures)</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={data} margin={{ top: 5, right: 20, bottom: 90, left: 0 }}>
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 13, fontWeight: 500, fill: textColor, dy: 30 }}
               interval={0}
               angle={-45}
               textAnchor="end"
-              height={80}
+              height={100}
             />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12, fill: textColor }} />
             <Tooltip
               formatter={(value) => [`${value}h`, "Déficit"]}
               contentStyle={{ borderRadius: "8px" }}

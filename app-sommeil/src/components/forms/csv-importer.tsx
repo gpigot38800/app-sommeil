@@ -196,7 +196,12 @@ export function CsvImporter({ onImportComplete }: CsvImporterProps) {
           (mappedFields.has("matricule") || (mappedFields.has("firstName") && mappedFields.has("lastName")));
       }
       case "employees":
-        return employees.length > 0;
+        // Autoriser de continuer si des employés existent OU si le CSV contient les données nécessaires
+        // pour créer automatiquement de nouveaux employés (matricule ou prénom+nom)
+        const mappedFields = new Set(Object.values(columnMapping));
+        const canCreateEmployees = mappedFields.has("matricule") ||
+          (mappedFields.has("firstName") && mappedFields.has("lastName"));
+        return employees.length > 0 || canCreateEmployees;
       case "shiftCodes":
         return true;
       case "preview":
