@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertBanner } from "@/components/dashboard/alert-banner";
 import { ComplianceSummary } from "@/components/dashboard/compliance-summary";
@@ -10,9 +10,8 @@ import { DepartmentSummary } from "@/components/dashboard/department-summary";
 import { FatigueBarChart } from "@/components/charts/fatigue-bar-chart";
 import { ShiftDistributionPie } from "@/components/charts/shift-distribution-pie";
 import { RefreshCw } from "lucide-react";
-import { toast } from "sonner";
 import type { RiskLevel } from "@/types";
-import type { ComplianceViolation } from "@/lib/compliance-engine/types";
+import { useFetch, useComplianceViolations, useMutation } from "@/hooks";
 
 interface OverviewItem {
   employee: {
@@ -32,64 +31,34 @@ interface OverviewItem {
 }
 
 export function DashboardClient() {
-  const [data, setData] = useState<OverviewItem[]>([]);
-  const [complianceData, setComplianceData] = useState<
-    { employeeId: string; employeeName: string; department: string | null; violations: ComplianceViolation[] }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [recalculating, setRecalculating] = useState(false);
-
-  const fetchOverview = useCallback(async () => {
-    try {
-      // Dates pour compliance : 7 derniers jours
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
-      const startStr = startDate.toISOString().split("T")[0];
-      const endStr = endDate.toISOString().split("T")[0];
-
-      const [res, compRes] = await Promise.all([
-        fetch("/api/admin/fatigue/overview"),
-        fetch(`/api/admin/compliance?startDate=${startStr}&endDate=${endStr}`),
-      ]);
-      if (res.ok) {
-        setData(await res.json());
-      }
-      if (compRes.ok) {
-        setComplianceData(await compRes.json());
-      }
-    } finally {
-      setLoading(false);
-    }
+  // Compliance URL: 7 derniers jours
+  const complianceUrl = useMemo(() => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+    const startStr = startDate.toISOString().split("T")[0];
+    const endStr = endDate.toISOString().split("T")[0];
+    return `/api/admin/compliance?startDate=${startStr}&endDate=${endStr}`;
   }, []);
 
-  useEffect(() => {
-    fetchOverview();
-  }, [fetchOverview]);
+  const { data, loading } = useFetch<OverviewItem[]>("/api/admin/fatigue/overview");
+  const { rawData: complianceData, refetch: refetchCompliance } = useComplianceViolations(complianceUrl);
+
+  const recalculateMutation = useMutation<{ windowDays: number }>({
+    url: "/api/admin/fatigue/calculate",
+    successMessage: "Fatigue recalculée",
+    errorMessage: "Erreur lors du recalcul",
+  });
 
   async function handleRecalculate() {
-    setRecalculating(true);
-    try {
-      const res = await fetch("/api/admin/fatigue/calculate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ windowDays: 7 }),
-      });
-      if (res.ok) {
-        const result = await res.json();
-        toast.success(`Fatigue recalculée pour ${result.calculated} employé(s)`);
-        fetchOverview();
-      } else {
-        toast.error("Erreur lors du recalcul");
-      }
-    } finally {
-      setRecalculating(false);
-    }
+    await recalculateMutation.mutate({ windowDays: 7 });
   }
 
+  const overviewData = data ?? [];
+
   // Compute KPIs
-  const totalEmployees = data.length;
-  const withFatigue = data.filter((d) => d.fatigue);
+  const totalEmployees = overviewData.length;
+  const withFatigue = overviewData.filter((d) => d.fatigue);
   const avgRecovery = withFatigue.length > 0
     ? Math.round(withFatigue.reduce((sum, d) => sum + (d.fatigue?.recoveryScore ?? 100), 0) / withFatigue.length)
     : 100;
@@ -124,7 +93,7 @@ export function DashboardClient() {
 
   // Department summary
   const deptMap = new Map<string, { employees: number; totalDeficit: number; worstRisk: RiskLevel }>();
-  for (const d of data) {
+  for (const d of overviewData) {
     const dept = d.employee.department || "Non assigné";
     const existing = deptMap.get(dept) || { employees: 0, totalDeficit: 0, worstRisk: "low" as RiskLevel };
     existing.employees++;
@@ -157,10 +126,10 @@ export function DashboardClient() {
         <Button
           variant="outline"
           onClick={handleRecalculate}
-          disabled={recalculating}
+          disabled={recalculateMutation.loading}
         >
-          <RefreshCw className={`mr-2 h-4 w-4 ${recalculating ? "animate-spin" : ""}`} />
-          {recalculating ? "Recalcul..." : "Recalculer la fatigue"}
+          <RefreshCw className={`mr-2 h-4 w-4 ${recalculateMutation.loading ? "animate-spin" : ""}`} />
+          {recalculateMutation.loading ? "Recalcul..." : "Recalculer la fatigue"}
         </Button>
       </div>
 
@@ -176,7 +145,7 @@ export function DashboardClient() {
         complianceViolationCount={complianceData.reduce((sum, d) => sum + d.violations.length, 0)}
       />
 
-      <EmployeeOverviewTable data={data} />
+      <EmployeeOverviewTable data={overviewData} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <FatigueBarChart data={barData} />

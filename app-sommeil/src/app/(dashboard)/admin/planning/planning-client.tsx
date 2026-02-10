@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,8 +21,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import type { Employee, ShiftCode } from "@/types";
-import type { ComplianceViolation } from "@/lib/compliance-engine/types";
 import { CalendarGrid, type ShiftRow } from "@/components/planning/calendar-grid";
 import { ShiftCellDialog } from "@/components/planning/shift-cell-dialog";
 import {
@@ -32,13 +30,15 @@ import {
   formatDateISO,
   formatWeekRange,
 } from "@/lib/date-utils";
+import {
+  useEmployees,
+  useShiftCodes,
+  useComplianceViolations,
+  useFetch,
+  useMutation,
+} from "@/hooks";
 
 export function PlanningClient() {
-  const [shiftRows, setShiftRows] = useState<ShiftRow[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [shiftCodes, setShiftCodes] = useState<ShiftCode[]>([]);
-  const [violations, setViolations] = useState<Map<string, ComplianceViolation[]>>(new Map());
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("all");
 
@@ -66,61 +66,61 @@ export function PlanningClient() {
     existingShift?: ShiftRow;
   } | null>(null);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const weekEnd = getWeekEnd(weekStart);
-      const startDate = formatDateISO(weekStart);
-      const endDate = formatDateISO(weekEnd);
+  // Computed URLs
+  const weekEnd = getWeekEnd(weekStart);
+  const startDate = formatDateISO(weekStart);
+  const endDate = formatDateISO(weekEnd);
 
-      const shiftsUrl =
-        viewMode === "calendar"
-          ? `/api/admin/shifts?startDate=${startDate}&endDate=${endDate}`
-          : "/api/admin/shifts";
+  const shiftsUrl = useMemo(
+    () =>
+      viewMode === "calendar"
+        ? `/api/admin/shifts?startDate=${startDate}&endDate=${endDate}`
+        : "/api/admin/shifts",
+    [viewMode, startDate, endDate]
+  );
 
-      const [shiftsRes, empRes, codesRes, complianceRes] = await Promise.all([
-        fetch(shiftsUrl),
-        fetch("/api/admin/employees"),
-        fetch("/api/admin/shift-codes"),
-        viewMode === "calendar"
-          ? fetch(`/api/admin/compliance?startDate=${startDate}&endDate=${endDate}`)
-          : Promise.resolve(null),
-      ]);
-      if (shiftsRes.ok) setShiftRows(await shiftsRes.json());
-      if (empRes.ok) setEmployees(await empRes.json());
-      if (codesRes.ok) setShiftCodes(await codesRes.json());
+  const complianceUrl = useMemo(
+    () =>
+      viewMode === "calendar"
+        ? `/api/admin/compliance?startDate=${startDate}&endDate=${endDate}`
+        : null,
+    [viewMode, startDate, endDate]
+  );
 
-      // Construire le Map des violations par cellule
-      if (complianceRes?.ok) {
-        const complianceData: {
-          employeeId: string;
-          violations: ComplianceViolation[];
-        }[] = await complianceRes.json();
-        const map = new Map<string, ComplianceViolation[]>();
-        for (const entry of complianceData) {
-          for (const v of entry.violations) {
-            const key = `${entry.employeeId}:${v.date}`;
-            const existing = map.get(key) || [];
-            existing.push(v);
-            map.set(key, existing);
-          }
-        }
-        setViolations(map);
-      } else {
-        setViolations(new Map());
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [viewMode, weekStart]);
+  // Hooks
+  const { data: employees, refetch: refetchEmployees } = useEmployees();
+  const { data: shiftCodes } = useShiftCodes();
+  const { data: shiftRows, loading: shiftsLoading, refetch: refetchShifts } = useFetch<ShiftRow[]>(shiftsUrl);
+  const { violations, refetch: refetchCompliance } = useComplianceViolations(complianceUrl);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchData();
-  }, [fetchData]);
+  const loading = shiftsLoading;
+
+  const refetchAll = useCallback(() => {
+    refetchShifts();
+    refetchEmployees();
+    refetchCompliance();
+  }, [refetchShifts, refetchEmployees, refetchCompliance]);
+
+  const createShiftMutation = useMutation<Record<string, unknown>>({
+    url: "/api/admin/shifts",
+    successMessage: "Shift ajoute",
+    errorMessage: "Erreur lors de l'ajout",
+    onSuccess: () => {
+      setDialogOpen(false);
+      refetchAll();
+    },
+  });
+
+  const deleteShiftMutation = useMutation<string>({
+    url: (id) => `/api/admin/shifts/${id}`,
+    method: "DELETE",
+    successMessage: "Shift supprime",
+    onSuccess: refetchAll,
+  });
 
   function handleCodeChange(code: string) {
     setFormCode(code);
-    const sc = shiftCodes.find((c) => c.code === code);
+    const sc = (shiftCodes ?? []).find((c) => c.code === code);
     if (sc) {
       if (sc.defaultStartTime) setFormStartTime(sc.defaultStartTime);
       if (sc.defaultEndTime) setFormEndTime(sc.defaultEndTime);
@@ -133,40 +133,25 @@ export function PlanningClient() {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
-    const sc = shiftCodes.find((c) => c.code === formCode);
-    const res = await fetch("/api/admin/shifts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        employeeId: formEmployeeId,
-        startDate: formDate,
-        endDate: formDate,
-        shiftType: sc?.shiftCategory ?? "jour",
-        startTime: formStartTime,
-        endTime: formEndTime,
-        shiftCode: formCode || null,
-        breakMinutes: Number(formBreak) || 0,
-      }),
+    const sc = (shiftCodes ?? []).find((c) => c.code === formCode);
+    await createShiftMutation.mutate({
+      employeeId: formEmployeeId,
+      startDate: formDate,
+      endDate: formDate,
+      shiftType: sc?.shiftCategory ?? "jour",
+      startTime: formStartTime,
+      endTime: formEndTime,
+      shiftCode: formCode || null,
+      breakMinutes: Number(formBreak) || 0,
     });
-    if (res.ok) {
-      toast.success("Shift ajoute");
-      setDialogOpen(false);
-      fetchData();
-    } else {
-      toast.error("Erreur lors de l'ajout");
-    }
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/admin/shifts/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      toast.success("Shift supprime");
-      fetchData();
-    }
+    await deleteShiftMutation.mutate(id);
   }
 
   function handleCellClick(employeeId: string, date: string, existingShift?: ShiftRow) {
-    const emp = employees.find((e) => e.id === employeeId);
+    const emp = (employees ?? []).find((e) => e.id === employeeId);
     const name = emp ? `${emp.lastName} ${emp.firstName}` : "";
     setCellDialogProps({ employeeId, employeeName: name, date, existingShift });
     setCellDialogOpen(true);
@@ -175,13 +160,13 @@ export function PlanningClient() {
   const departments = [
     ...new Set(
       viewMode === "calendar"
-        ? employees.map((e) => e.department).filter(Boolean)
-        : shiftRows.map((r) => r.employeeDepartment).filter(Boolean)
+        ? (employees ?? []).map((e) => e.department).filter(Boolean)
+        : (shiftRows ?? []).map((r) => r.employeeDepartment).filter(Boolean)
     ),
   ];
 
   // Filter for calendar
-  const filteredEmployees = employees.filter((e) => {
+  const filteredEmployees = (employees ?? []).filter((e) => {
     if (!e.isActive) return false;
     if (filterDept !== "all" && e.department !== filterDept) return false;
     if (search) {
@@ -192,7 +177,7 @@ export function PlanningClient() {
   });
 
   // Filter for list
-  const filteredShifts = shiftRows.filter((r) => {
+  const filteredShifts = (shiftRows ?? []).filter((r) => {
     if (filterDept !== "all" && r.employeeDepartment !== filterDept) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -201,8 +186,6 @@ export function PlanningClient() {
     }
     return true;
   });
-
-  const weekEnd = getWeekEnd(weekStart);
 
   if (loading) {
     return <div className="py-12 text-center text-muted-foreground">Chargement...</div>;
@@ -256,7 +239,7 @@ export function PlanningClient() {
                         <SelectValue placeholder="Selectionner..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {employees.map((e) => (
+                        {(employees ?? []).map((e) => (
                           <SelectItem key={e.id} value={e.id}>
                             {e.firstName} {e.lastName}
                           </SelectItem>
@@ -279,7 +262,7 @@ export function PlanningClient() {
                         <SelectValue placeholder="Choisir..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {shiftCodes
+                        {(shiftCodes ?? [])
                           .filter((c) => c.isWorkShift)
                           .map((c) => (
                             <SelectItem key={c.id} value={c.code}>
@@ -388,8 +371,8 @@ export function PlanningClient() {
         <>
           <CalendarGrid
             employees={filteredEmployees}
-            shiftRows={shiftRows}
-            shiftCodes={shiftCodes}
+            shiftRows={shiftRows ?? []}
+            shiftCodes={shiftCodes ?? []}
             weekStart={weekStart}
             onCellClick={handleCellClick}
             violations={violations}
@@ -402,9 +385,9 @@ export function PlanningClient() {
               employeeId={cellDialogProps.employeeId}
               date={cellDialogProps.date}
               existingShift={cellDialogProps.existingShift}
-              shiftCodes={shiftCodes}
-              onSaved={fetchData}
-              allShiftRows={shiftRows}
+              shiftCodes={shiftCodes ?? []}
+              onSaved={refetchAll}
+              allShiftRows={shiftRows ?? []}
             />
           )}
         </>

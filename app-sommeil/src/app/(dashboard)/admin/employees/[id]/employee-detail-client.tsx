@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { EmployeeForm } from "@/components/forms/employee-form";
 import { ArrowLeft } from "lucide-react";
 import type { Employee } from "@/types";
 import type { EmployeeFormValues } from "@/lib/validators/employee";
-import { toast } from "sonner";
+import { useFetch, useMutation } from "@/hooks";
 
 interface EmployeeDetailClientProps {
   employeeId: string;
@@ -16,43 +15,17 @@ interface EmployeeDetailClientProps {
 
 export function EmployeeDetailClient({ employeeId }: EmployeeDetailClientProps) {
   const router = useRouter();
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { data: employee, loading, refetch } = useFetch<Employee>(
+    `/api/admin/employees/${employeeId}`
+  );
 
-  const fetchEmployee = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/admin/employees/${employeeId}`);
-      if (res.ok) {
-        setEmployee(await res.json());
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [employeeId]);
-
-  useEffect(() => {
-    fetchEmployee();
-  }, [fetchEmployee]);
-
-  async function handleUpdate(values: EmployeeFormValues) {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/admin/employees/${employeeId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      if (res.ok) {
-        toast.success("Employé mis à jour");
-        fetchEmployee();
-      } else {
-        toast.error("Erreur lors de la mise à jour");
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
+  const updateMutation = useMutation<EmployeeFormValues>({
+    url: `/api/admin/employees/${employeeId}`,
+    method: "PUT",
+    successMessage: "Employé mis à jour",
+    errorMessage: "Erreur lors de la mise à jour",
+    onSuccess: refetch,
+  });
 
   if (loading) {
     return (
@@ -104,8 +77,8 @@ export function EmployeeDetailClient({ employeeId }: EmployeeDetailClientProps) 
               habitualSleepTime: employee.habitualSleepTime ?? "23:00",
               habitualWakeTime: employee.habitualWakeTime ?? "07:00",
             }}
-            onSubmit={handleUpdate}
-            loading={saving}
+            onSubmit={async (values) => { await updateMutation.mutate(values); }}
+            loading={updateMutation.loading}
             submitLabel="Enregistrer"
           />
         </CardContent>

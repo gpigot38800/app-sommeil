@@ -1,4 +1,4 @@
-import { timeToMinutes, calculateSleepDuration } from "../planning-engine/rules";
+import { timeToMinutes, calculateSleepDuration } from "../time-utils";
 import type { ShiftInput } from "./types";
 
 /**

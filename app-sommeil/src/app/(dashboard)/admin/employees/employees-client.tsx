@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -14,66 +14,37 @@ import {
 import { EmployeeForm } from "@/components/forms/employee-form";
 import { EmployeeList } from "@/components/forms/employee-list";
 import { Plus, Search } from "lucide-react";
-import type { Employee } from "@/types";
 import type { EmployeeFormValues } from "@/lib/validators/employee";
-import { toast } from "sonner";
+import { useEmployees, useMutation } from "@/hooks";
 
 export function EmployeesClient() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: employees, loading, refetch } = useEmployees();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  const fetchEmployees = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/employees");
-      if (res.ok) {
-        const data = await res.json();
-        setEmployees(data);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const createMutation = useMutation<EmployeeFormValues>({
+    url: "/api/admin/employees",
+    successMessage: "Employé ajouté",
+    errorMessage: "Erreur lors de l'ajout",
+    onSuccess: () => {
+      setDialogOpen(false);
+      refetch();
+    },
+  });
 
-  useEffect(() => {
-    fetchEmployees();
-  }, [fetchEmployees]);
-
-  async function handleCreate(values: EmployeeFormValues) {
-    setFormLoading(true);
-    try {
-      const res = await fetch("/api/admin/employees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      if (res.ok) {
-        toast.success("Employé ajouté");
-        setDialogOpen(false);
-        fetchEmployees();
-      } else {
-        toast.error("Erreur lors de l'ajout");
-      }
-    } finally {
-      setFormLoading(false);
-    }
-  }
+  const deleteMutation = useMutation<string>({
+    url: (id) => `/api/admin/employees/${id}`,
+    method: "DELETE",
+    successMessage: "Employé désactivé",
+    errorMessage: "Erreur lors de la suppression",
+    onSuccess: refetch,
+  });
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/admin/employees/${id}`, {
-      method: "DELETE",
-    });
-    if (res.ok) {
-      toast.success("Employé désactivé");
-      fetchEmployees();
-    } else {
-      toast.error("Erreur lors de la suppression");
-    }
+    await deleteMutation.mutate(id);
   }
 
-  const filtered = employees.filter((e) => {
+  const filtered = (employees ?? []).filter((e) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -100,9 +71,9 @@ export function EmployeesClient() {
               <DialogTitle>Ajouter un employé</DialogTitle>
             </DialogHeader>
             <EmployeeForm
-              onSubmit={handleCreate}
+              onSubmit={async (values) => { await createMutation.mutate(values); }}
               onCancel={() => setDialogOpen(false)}
-              loading={formLoading}
+              loading={createMutation.loading}
               submitLabel="Ajouter"
             />
           </DialogContent>

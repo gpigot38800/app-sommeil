@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,6 +23,7 @@ import {
 import { Plus, Pencil, Trash2, Loader2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import type { ShiftCode, ShiftCategory } from "@/types";
+import { useShiftCodes, useMutation } from "@/hooks";
 
 type EditableCode = Omit<ShiftCode, "id" | "organizationId"> & { id?: string };
 
@@ -55,9 +55,7 @@ const emptyCode: EditableCode = {
 };
 
 export function ShiftCodesManager() {
-  const [codes, setCodes] = useState<ShiftCode[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { data: codes, loading, refetch } = useShiftCodes();
 
   // Inline editing
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -69,25 +67,39 @@ export function ShiftCodesManager() {
 
   // Delete confirmation
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleteDeleting, setDeleteDeleting] = useState(false);
 
-  const fetchCodes = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/shift-codes");
-      if (!res.ok) throw new Error("Erreur");
-      const data = await res.json();
-      setCodes(data);
-    } catch {
-      toast.error("Impossible de charger les codes vacation");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const addMutation = useMutation<EditableCode>({
+    url: "/api/admin/shift-codes",
+    successMessage: "Code vacation cree",
+    errorMessage: "Erreur lors de la creation",
+    onSuccess: () => {
+      setShowAdd(false);
+      setAddForm({ ...emptyCode });
+      refetch();
+    },
+  });
 
-  useEffect(() => {
-    fetchCodes();
-  }, [fetchCodes]);
+  const editMutation = useMutation<EditableCode & { id: string }>({
+    url: "/api/admin/shift-codes",
+    method: "PUT",
+    successMessage: "Code mis a jour",
+    errorMessage: "Erreur lors de la mise a jour",
+    onSuccess: () => {
+      setEditingId(null);
+      refetch();
+    },
+  });
+
+  const deleteMutation = useMutation<{ id: string }>({
+    url: "/api/admin/shift-codes",
+    method: "DELETE",
+    successMessage: "Code vacation supprime",
+    errorMessage: "Erreur lors de la suppression",
+    onSuccess: () => {
+      setDeleteId(null);
+      refetch();
+    },
+  });
 
   // --- Add ---
   async function handleAdd() {
@@ -95,36 +107,14 @@ export function ShiftCodesManager() {
       toast.error("Le code et la categorie sont requis");
       return;
     }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/shift-codes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: addForm.code,
-          label: addForm.label || null,
-          shiftCategory: addForm.shiftCategory,
-          defaultStartTime: addForm.defaultStartTime || null,
-          defaultEndTime: addForm.defaultEndTime || null,
-          defaultDurationMinutes: addForm.defaultDurationMinutes || null,
-          includesBreakMinutes: addForm.includesBreakMinutes || 0,
-          isWorkShift: addForm.isWorkShift,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast.error(err.error || "Erreur lors de la creation");
-        return;
-      }
-      toast.success("Code vacation cree");
-      setShowAdd(false);
-      setAddForm({ ...emptyCode });
-      fetchCodes();
-    } catch {
-      toast.error("Erreur lors de la creation");
-    } finally {
-      setSaving(false);
-    }
+    await addMutation.mutate({
+      ...addForm,
+      label: addForm.label || "",
+      defaultStartTime: addForm.defaultStartTime || "",
+      defaultEndTime: addForm.defaultEndTime || "",
+      defaultDurationMinutes: addForm.defaultDurationMinutes || null,
+      includesBreakMinutes: addForm.includesBreakMinutes || 0,
+    });
   }
 
   // --- Edit ---
@@ -144,58 +134,26 @@ export function ShiftCodesManager() {
 
   async function handleSaveEdit() {
     if (!editingId || !editForm.code) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/shift-codes", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingId,
-          code: editForm.code,
-          label: editForm.label || null,
-          shiftCategory: editForm.shiftCategory,
-          defaultStartTime: editForm.defaultStartTime || null,
-          defaultEndTime: editForm.defaultEndTime || null,
-          defaultDurationMinutes: editForm.defaultDurationMinutes || null,
-          includesBreakMinutes: editForm.includesBreakMinutes || 0,
-          isWorkShift: editForm.isWorkShift,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast.error(err.error || "Erreur lors de la mise a jour");
-        return;
-      }
-      toast.success("Code mis a jour");
-      setEditingId(null);
-      fetchCodes();
-    } catch {
-      toast.error("Erreur lors de la mise a jour");
-    } finally {
-      setSaving(false);
-    }
+    await editMutation.mutate({
+      id: editingId,
+      code: editForm.code,
+      label: editForm.label || "",
+      shiftCategory: editForm.shiftCategory,
+      defaultStartTime: editForm.defaultStartTime || "",
+      defaultEndTime: editForm.defaultEndTime || "",
+      defaultDurationMinutes: editForm.defaultDurationMinutes || null,
+      includesBreakMinutes: editForm.includesBreakMinutes || 0,
+      isWorkShift: editForm.isWorkShift,
+    });
   }
 
   // --- Delete ---
   async function handleDelete() {
     if (!deleteId) return;
-    setDeleteDeleting(true);
-    try {
-      const res = await fetch("/api/admin/shift-codes", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: deleteId }),
-      });
-      if (!res.ok) throw new Error("Erreur");
-      toast.success("Code vacation supprime");
-      setDeleteId(null);
-      fetchCodes();
-    } catch {
-      toast.error("Erreur lors de la suppression");
-    } finally {
-      setDeleteDeleting(false);
-    }
+    await deleteMutation.mutate({ id: deleteId });
   }
+
+  const saving = addMutation.loading || editMutation.loading;
 
   // --- Inline form helper ---
   function CodeFormRow({
@@ -407,7 +365,7 @@ export function ShiftCodesManager() {
                   />
                 )}
 
-                {codes.map((code) => {
+                {(codes ?? []).map((code) => {
                   if (editingId === code.id) {
                     return (
                       <CodeFormRow
@@ -492,7 +450,7 @@ export function ShiftCodesManager() {
           </div>
         )}
 
-        {!loading && codes.length === 0 && !showAdd && (
+        {!loading && (codes ?? []).length === 0 && !showAdd && (
           <div className="py-8 text-center text-muted-foreground">
             Aucun code vacation. Cliquez sur &quot;Nouveau code&quot; pour
             commencer.
@@ -517,9 +475,9 @@ export function ShiftCodesManager() {
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={deleteDeleting}
+              disabled={deleteMutation.loading}
             >
-              {deleteDeleting ? "Suppression..." : "Supprimer"}
+              {deleteMutation.loading ? "Suppression..." : "Supprimer"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { timeToMinutes } from "../planning-engine/rules";
+import { timeToMinutes } from "../time-utils";
 import type { ShiftInput } from "../fatigue-engine/types";
 import type { ComplianceViolation } from "./types";
 
