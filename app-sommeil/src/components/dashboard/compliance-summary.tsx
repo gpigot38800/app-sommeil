@@ -1,8 +1,10 @@
 "use client";
 
-import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ShieldAlert, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { ComplianceViolation } from "@/lib/compliance-engine/types";
 
 interface ComplianceEntry {
@@ -44,6 +46,9 @@ const SEVERITY_CONFIG: Record<
 };
 
 export function ComplianceSummary({ data }: ComplianceSummaryProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const INITIAL_DISPLAY_COUNT = 5;
+
   const totalViolations = data.reduce((sum, d) => sum + d.violations.length, 0);
   const criticalCount = data.reduce(
     (sum, d) => sum + d.violations.filter((v) => v.severity === "critical").length,
@@ -67,6 +72,9 @@ export function ComplianceSummary({ data }: ComplianceSummaryProps) {
         (severityOrder[a.severity] ?? 2) - (severityOrder[b.severity] ?? 2) ||
         a.date.localeCompare(b.date)
     );
+
+  const displayedRows = isExpanded ? rows : rows.slice(0, INITIAL_DISPLAY_COUNT);
+  const hasMore = rows.length > INITIAL_DISPLAY_COUNT;
 
   return (
     <div className="space-y-4">
@@ -124,7 +132,7 @@ export function ComplianceSummary({ data }: ComplianceSummaryProps) {
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 20).map((row, i) => (
+                {displayedRows.map((row, i) => (
                   <tr key={i} className="border-b last:border-0">
                     <td className="py-2 pr-4 font-medium">{row.employeeName}</td>
                     <td className="py-2 pr-4 text-muted-foreground hidden sm:table-cell">
@@ -148,12 +156,29 @@ export function ComplianceSummary({ data }: ComplianceSummaryProps) {
                 ))}
               </tbody>
             </table>
-            {rows.length > 20 && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                + {rows.length - 20} autres violations...
-              </p>
-            )}
           </div>
+          {hasMore && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="gap-2"
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    Voir moins
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Voir tout ({rows.length - INITIAL_DISPLAY_COUNT} de plus)
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

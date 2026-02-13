@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { FatigueBadge } from "@/components/ui/fatigue-badge";
 import type { RiskLevel } from "@/types";
 
@@ -26,6 +29,9 @@ interface EmployeeOverviewTableProps {
 }
 
 export function EmployeeOverviewTable({ data }: EmployeeOverviewTableProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const INITIAL_DISPLAY_COUNT = 5;
+
   if (data.length === 0) {
     return (
       <Card>
@@ -35,6 +41,9 @@ export function EmployeeOverviewTable({ data }: EmployeeOverviewTableProps) {
       </Card>
     );
   }
+
+  const displayedData = isExpanded ? data : data.slice(0, INITIAL_DISPLAY_COUNT);
+  const hasMore = data.length > INITIAL_DISPLAY_COUNT;
 
   return (
     <Card>
@@ -55,7 +64,7 @@ export function EmployeeOverviewTable({ data }: EmployeeOverviewTableProps) {
               </tr>
             </thead>
             <tbody>
-              {data.map((row) => (
+              {displayedData.map((row) => (
                 <tr key={row.employee.id} className="border-b hover:bg-muted/30">
                   <td className="px-4 py-2">
                     <Link
@@ -96,6 +105,28 @@ export function EmployeeOverviewTable({ data }: EmployeeOverviewTableProps) {
             </tbody>
           </table>
         </div>
+        {hasMore && (
+          <div className="mt-4 flex justify-center pb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="gap-2"
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp className="h-4 w-4" />
+                  Voir moins
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Voir tout ({data.length - INITIAL_DISPLAY_COUNT} de plus)
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
