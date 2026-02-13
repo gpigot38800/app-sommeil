@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Menu, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "./theme-toggle";
 import { createClient } from "@/lib/supabase/client";
 
@@ -25,6 +26,8 @@ export function Navbar({ userEmail, onMenuClick }: NavbarProps) {
     ? userEmail.substring(0, 2).toUpperCase()
     : "??";
 
+  const isDemoMode = userEmail === "demo@demo.com";
+
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-card px-4">
       <Button
@@ -40,6 +43,12 @@ export function Navbar({ userEmail, onMenuClick }: NavbarProps) {
       <span className="text-lg font-semibold md:hidden">App Sommeil</span>
 
       <div className="flex-1" />
+
+      {isDemoMode && (
+        <Badge variant="secondary" className="hidden sm:flex">
+          MODE DÉMO
+        </Badge>
+      )}
 
       <ThemeToggle />
 

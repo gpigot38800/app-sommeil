@@ -30,6 +30,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -52,6 +53,28 @@ export default function LoginPage() {
     if (signInError) {
       setError("Email ou mot de passe incorrect.");
       setLoading(false);
+      return;
+    }
+
+    router.push("/admin/dashboard");
+    router.refresh();
+  }
+
+  async function loginAsDemo() {
+    setDemoLoading(true);
+    setError(null);
+
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: "demo@demo.com",
+      password: "Demo123!",
+    });
+
+    if (signInError) {
+      setError(
+        "Le compte démo n'est pas encore configuré. Veuillez contacter l'administrateur."
+      );
+      setDemoLoading(false);
       return;
     }
 
@@ -105,11 +128,32 @@ export default function LoginPage() {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || demoLoading}>
               {loading ? "Connexion en cours..." : "Se connecter"}
             </Button>
           </form>
         </Form>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">
+              Ou
+            </span>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={loginAsDemo}
+          disabled={loading || demoLoading}
+        >
+          {demoLoading ? "Connexion..." : "🚀 Essayer l'application de démo"}
+        </Button>
       </CardContent>
       <CardFooter className="justify-center">
         <p className="text-sm text-muted-foreground">

@@ -85,8 +85,8 @@ export const workShifts = pgTable("work_shifts", {
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
   shiftType: text("shift_type").notNull(),
-  startTime: time("start_time").notNull(),
-  endTime: time("end_time").notNull(),
+  startTime: time("start_time"), // Nullable pour les repos/absences
+  endTime: time("end_time"), // Nullable pour les repos/absences
   shiftCode: text("shift_code"),
   breakMinutes: integer("break_minutes").default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
