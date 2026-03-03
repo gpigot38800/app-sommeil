@@ -29,12 +29,12 @@ export function AlertBanner({ criticalCount, highCount }: AlertBannerProps) {
         <div>
           {criticalCount > 0 && (
             <p className="font-semibold text-red-800 dark:text-red-300">
-              {criticalCount} employé{criticalCount > 1 ? "s" : ""} en situation critique
+              {criticalCount} employé{criticalCount > 1 ? "s" : ""} nécessite{criticalCount > 1 ? "nt" : ""} une attention immediate
             </p>
           )}
           {highCount > 0 && (
             <p className="text-sm text-orange-800 dark:text-orange-300">
-              {highCount} employé{highCount > 1 ? "s" : ""} en alerte élevée
+              {highCount} employé{highCount > 1 ? "s" : ""} a surveiller
             </p>
           )}
         </div>

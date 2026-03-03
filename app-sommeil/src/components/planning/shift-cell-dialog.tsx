@@ -274,7 +274,7 @@ export function ShiftCellDialog({
             <div className="flex items-center gap-2 mb-1.5">
               <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
               <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">
-                Alertes reglementaires
+                Points de conformite
               </span>
             </div>
             <ul className="space-y-1">

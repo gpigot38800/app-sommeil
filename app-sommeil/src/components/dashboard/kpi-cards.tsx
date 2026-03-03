@@ -46,7 +46,7 @@ export function KpiCards({
     ...(complianceViolationCount !== undefined
       ? [
           {
-            title: "Violations Code du Travail",
+            title: "Conformite reglementaire",
             value: complianceViolationCount,
             icon: ShieldAlert,
             color:

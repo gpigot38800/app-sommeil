@@ -50,7 +50,7 @@ export function ComplianceIndicator({ violations }: ComplianceIndicatorProps) {
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 font-semibold text-sm">
               <AlertTriangle className={`h-3.5 w-3.5 ${iconColor}`} />
-              {violations.length} violation{violations.length > 1 ? "s" : ""} reglementaire{violations.length > 1 ? "s" : ""}
+              {violations.length} point{violations.length > 1 ? "s" : ""} de vigilance
             </div>
             {violations.map((v, i) => (
               <div key={i} className="text-xs text-muted-foreground">

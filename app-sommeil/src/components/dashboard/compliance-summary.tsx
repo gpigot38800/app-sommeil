@@ -32,15 +32,15 @@ const SEVERITY_CONFIG: Record<
   { label: string; className: string }
 > = {
   critical: {
-    label: "Critique",
+    label: "Urgent",
     className: "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300",
   },
   violation: {
-    label: "Violation",
+    label: "A corriger",
     className: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   },
   warning: {
-    label: "Attention",
+    label: "A verifier",
     className: "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
   },
 };
@@ -102,10 +102,10 @@ export function ComplianceSummary({ data }: ComplianceSummaryProps) {
                   : "font-semibold text-orange-800 dark:text-orange-300"
               }
             >
-              {totalViolations} violation{totalViolations > 1 ? "s" : ""} reglementaire{totalViolations > 1 ? "s" : ""} cette semaine
+              {totalViolations} point{totalViolations > 1 ? "s" : ""} de vigilance cette semaine
             </p>
             <p className="text-sm text-muted-foreground">
-              {data.length} employe{data.length > 1 ? "s" : ""} concerne{data.length > 1 ? "s" : ""} — Code du Travail
+              {data.length} employe{data.length > 1 ? "s" : ""} concerne{data.length > 1 ? "s" : ""} — conformite reglementaire
             </p>
           </div>
         </div>
@@ -116,7 +116,7 @@ export function ComplianceSummary({ data }: ComplianceSummaryProps) {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <AlertTriangle className="h-4 w-4" />
-            Detail des violations
+            Points a verifier
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -128,7 +128,7 @@ export function ComplianceSummary({ data }: ComplianceSummaryProps) {
                   <th className="pb-2 pr-4 font-medium text-muted-foreground hidden sm:table-cell">Service</th>
                   <th className="pb-2 pr-4 font-medium text-muted-foreground">Type</th>
                   <th className="pb-2 pr-4 font-medium text-muted-foreground hidden sm:table-cell">Date</th>
-                  <th className="pb-2 font-medium text-muted-foreground">Severite</th>
+                  <th className="pb-2 font-medium text-muted-foreground">Priorite</th>
                 </tr>
               </thead>
               <tbody>
