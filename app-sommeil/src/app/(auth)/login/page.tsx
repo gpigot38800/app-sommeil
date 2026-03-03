@@ -71,8 +71,9 @@ export default function LoginPage() {
     });
 
     if (signInError) {
+      console.error("Demo login error:", signInError.message, signInError);
       setError(
-        "Le compte démo n'est pas encore configuré. Veuillez contacter l'administrateur."
+        `Erreur démo : ${signInError.message}`
       );
       setDemoLoading(false);
       return;
